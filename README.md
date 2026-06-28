@@ -1,45 +1,58 @@
-# langchain-chat
+# Reins
 
-langchain-chat is a powerful AI-driven Q&A system that leverages OpenAI's GPT-4 model to provide relevant and accurate
-answers to user queries. The system indexes documents from websites or PDF files using FAISS (Facebook AI Similarity
-Search) and offers a convenient interface for interacting with the data.
+**A lightweight agent harness you bolt onto your app so an LLM can operate it — safely, and cheaply.**
 
-## Features
+You register functions you already have (or your ORM models), hand it a goal in plain language, and it figures out which of your operations to call and in what order — running them **through your own code (never raw SQL by default)**, with near-zero token overhead and safe-by-default writes. **No graph to draw.**
 
-- Load and split documents from websites or PDF files
-- Index documents using FAISS for efficient similarity search
-- Utilize OpenAI's GPT-4 to generate human-like responses
-- Remember previous conversations and provide context-aware answers
-- Easy to set up and extend
+> The wedge: **Reins gives the model your _verbs_, not your _tables_.** Intent-named functions (`refund_order`) carry the meaning that raw schema and OpenAPI specs strip away.
 
-## Installation
+```python
+from reins import Agent
 
-1. Clone the repository
-2. Create a virtual environment
-    ```bash
-    python -m venv venv
-    ```
-3. Activate the virtual environment
-    ```bash
-    source venv/Scripts/activate
-    ```
-4. Install the dependencies
-    ```bash
-    pip install -r requirements.txt
-    ```
-5. Copy the `.env.example` file to `.env` and fill in the required values
-   ```bash
-   cp .env.example .env
-   ```
-   ```bash
-   OPEN_AI_KEY = "sk-"
-   WEBSITE_URLS="https://website1, https://website2"
-   ```
-6. Run the application
-    ```bash
-    python with_faiss.py
-    ```
+agent = Agent.from_orm(db)                 # auto-discovers your models; nothing else to write
+agent.ask("revenue by month this year")    # ask()  = read-only, never writes
+agent.run("refund order 8842")             # run()  = may write; the refund pauses for approval
+```
+or, zero code:
+```bash
+reins chat "postgresql://localhost/myapp"  # introspects your schema, read-only console
+```
 
-## Example Images
+Status: **pre-build.** This repository currently contains the design and the build plan. The code is built milestone-by-milestone by following `CLAUDE.md`.
 
-![Example 1](https://github.com/shamspias/langchain-chat/blob/main/images/conversation.PNG)
+---
+
+## This repo
+
+```
+CLAUDE.md            ← the build plan + non-negotiable rules (Claude Code reads this)
+AGENTS.md            ← pointer for AI coding agents
+PROMPTS.md           ← copy-paste prompts to drive the build with Claude Code
+docs/
+  ENGINEERING.md             ← how to reason + write robust code
+  open-agent-harness-spec.md ← the general harness contract (OAH)
+  reins-agent-harness-blueprint.md
+  reins-easy-by-design.md    ← the developer-experience spec
+  reins-v0.2-refined.md      ← competitive research + refinements
+```
+
+## Build it with Claude Code
+
+1. Open this folder in **Claude Code**.
+2. Send the onboarding prompt from `PROMPTS.md` §0 (it reads everything and confirms understanding).
+3. Then `PROMPTS.md` §1 to start **M0.1**, and §2 to walk each milestone.
+
+Principles: one milestone per PR · test-first (happy + unhappy paths) · `make check` green before "done" · safety invariants are never weakened to pass a test.
+
+## Development
+
+```bash
+make setup     # create the local venv, install the package + dev tools, install pre-commit
+make check     # the gate: ruff lint + mypy --strict + pytest + conformance
+```
+
+Python 3.11+. The package lives in `packages/python`. See `CONTRIBUTING.md` for the workflow.
+
+## License
+
+MIT — see `LICENSE`.

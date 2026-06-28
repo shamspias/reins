@@ -1,0 +1,28 @@
+# Fast hooks at commit time. The full type-check (mypy --strict) and tests run
+# in `make check` / CI. The ruff hooks use the project's own venv ruff so the
+# version always matches packages/python (set up by `make setup`).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: packages/python/.venv/bin/ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: packages/python/.venv/bin/ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true

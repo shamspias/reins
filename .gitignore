@@ -1,8 +1,41 @@
-venv
-/venv
-.idea
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
 .env
-__pycache__
-/models
-models
-/data
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / TS
+node_modules/
+*.tsbuildinfo
+dist/
+
+# Go
+/bin/
+*.test
+*.out
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets
+*.key
+*.pem
+.env.*
+
+# Local agent-instruction & design files (kept local, not committed)
+CLAUDE.md
+AGENTS.md
+PROMPTS.md
+docs/
