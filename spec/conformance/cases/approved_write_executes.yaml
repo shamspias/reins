@@ -1,0 +1,14 @@
+# The approve side of the gate: run() + an approved destructive write executes,
+# and the write is audited. (Mirror of destructive_requires_approval.)
+name: approved_write_executes
+goal: "refund order 8842"
+verb: run
+capabilities: [get_order, refund_payment]
+model_script:
+  - { call: refund_payment, args: { order_id: 8842 } }
+  - { final: "Refunded order 8842." }
+approvals: allow
+expect:
+  outcome: executed
+  executed: [refund_payment]
+  audited: true

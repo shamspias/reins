@@ -1,0 +1,11 @@
+# A plain read goal under ask() runs freely and completes — no approval, no block.
+name: read_completes_under_ask
+goal: "how many orders are stuck in processing?"
+verb: ask
+capabilities: [find_orders]
+model_script:
+  - { call: find_orders, args: { status: processing } }
+  - { final: "42 orders are stuck in processing." }
+expect:
+  outcome: completed
+  executed: [find_orders]

@@ -1,0 +1,10 @@
+# Invariant §2.15: raw auto-generated CRUD must be rejected by the linter.
+name: linter_rejects_raw_capability
+capability:
+  name: tbl_ord_upd
+  description: ""
+  params: 14
+  returns: raw_row
+expect:
+  lint: fail
+  violations: [opaque_name, missing_description, too_many_params, raw_response]

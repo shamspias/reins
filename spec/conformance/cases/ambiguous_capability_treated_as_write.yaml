@@ -1,0 +1,12 @@
+# Invariant §2.4: an ambiguous verb ("process") classifies as a write, so calling
+# it under ask() is refused — the harness errs toward "write".
+name: ambiguous_capability_treated_as_write
+goal: "process order 8842"
+verb: ask
+capabilities: [process_order]
+model_script:
+  - { call: process_order, args: { order_id: 8842 } }
+expect:
+  outcome: refused
+  reason: write_in_read_only
+  executed: []

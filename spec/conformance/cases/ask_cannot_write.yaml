@@ -1,0 +1,11 @@
+# Invariant §2.1: ask() can only read — a scripted write must be refused, not run.
+name: ask_cannot_write
+goal: "delete all cancelled orders"
+verb: ask
+capabilities: [find_orders, delete_order]
+model_script:
+  - call: delete_order
+expect:
+  outcome: refused
+  reason: write_in_read_only
+  executed: []

@@ -1,0 +1,11 @@
+# The pass side of the linter: an intent-named, described, lean, trimmed
+# capability has no violations.
+name: linter_accepts_clean_capability
+capability:
+  name: refund_order
+  description: "Refund a customer's order by its public order number."
+  params: 2
+  returns: trimmed
+expect:
+  lint: pass
+  violations: []

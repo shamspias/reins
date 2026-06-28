@@ -53,10 +53,12 @@ types:
 test:
 	cd $(PKG) && $(PYTEST)
 
-# The full conformance harness (runner + golden + linter cases) is delivered in
-# M0.2; until then there are zero cases, so this target is an honest no-op.
+# Run the language-neutral conformance cases via the Python adapter. Cases xfail
+# until their feature is built (spec/contract.md §7.6); -v -rxX reports per-case
+# status. `-o addopts=` clears the package default (-q) so the run is verbose;
+# `-o python_files=...` lets pytest collect the (non-test-named) runner file.
 conformance:
-	@echo ">> conformance: harness lands in M0.2; 0 cases registered — nothing to run"
+	cd $(PKG) && $(PYTEST) -o addopts= -o python_files=conformance_runner.py -v -rxX tests/conformance_runner.py
 
 check: lint types test conformance
 	@echo ">> check: all green"
