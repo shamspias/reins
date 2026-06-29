@@ -33,11 +33,21 @@ def test_load_cases_loads_a_valid_suite() -> None:
     assert names >= REQUIRED_CASES
 
 
-def test_every_case_drives_to_xfail_for_now() -> None:
-    # The M0.2 contract: no feature is built yet, so every case raises and xfails.
-    for case in load_cases():
+def test_golden_cases_raise_until_implemented() -> None:
+    golden = [c for c in load_cases() if c.kind == "golden"]
+    assert golden
+    for case in golden:
         with pytest.raises(HarnessNotImplemented):
             drive_case(case)
+
+
+def test_linter_cases_drive_to_a_result() -> None:
+    # As of M1.3 the linter cases run for real (no longer xfail).
+    linter = [c for c in load_cases() if c.kind == "linter"]
+    assert linter
+    for case in linter:
+        result = drive_case(case)
+        assert result["lint"] in ("pass", "fail")
 
 
 def test_infer_kind_golden() -> None:

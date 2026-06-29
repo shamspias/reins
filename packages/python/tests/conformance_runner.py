@@ -201,15 +201,26 @@ def load_cases(cases_dir: Path = CASES_DIR) -> list[Case]:
 def drive_case(case: Case) -> dict[str, Any]:
     """Run one case through the Reins harness and return the observed result.
 
-    Placeholder until the behavior under test exists:
-      * golden cases need the loop + verbs + policy/approval (M1.4, M2.x);
-      * linter cases need the CapabilityLinter (M1.3).
-    Raises :class:`HarnessNotImplemented` until then; the runner reports xfail.
+    Linter cases run for real as of M1.3. Golden cases still need the loop + verbs +
+    policy/approval (M1.4, M2.x); until then they raise :class:`HarnessNotImplemented`
+    and the runner reports them xfail.
     """
-    raise HarnessNotImplemented(
-        f"{case.kind} case {case.name!r} needs features from a later milestone "
-        "(golden: M1.4/M2.x, linter: M1.3)"
+    if case.kind == "linter":
+        return _drive_linter_case(case)
+    raise HarnessNotImplemented(f"golden case {case.name!r} needs the loop + policy (M1.4 / M2.x)")
+
+
+def _drive_linter_case(case: Case) -> dict[str, Any]:
+    from reins.linter import CapabilityLinter
+
+    cap = case.data["capability"]
+    report = CapabilityLinter().lint(
+        name=str(cap.get("name", "")),
+        description=str(cap.get("description", "")),
+        param_count=int(cap.get("params", 0)),
+        returns_raw=(cap.get("returns") == "raw_row"),
     )
+    return {"lint": "pass" if report.ok else "fail", "violations": list(report.violations)}
 
 
 def assert_outcome(case: Case, result: dict[str, Any]) -> None:

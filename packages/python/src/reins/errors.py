@@ -25,3 +25,9 @@ class SerializationError(ReinsError):
 class ModelError(ReinsError):
     """A control-plane failure in the model layer: no provider configured, the
     provider/SDK is unavailable, or the model returned unusable output."""
+
+
+class CapabilityError(ReinsError):
+    """A capability call cannot proceed: unknown name, or arguments that fail schema
+    validation. Model output is untrusted — the schema is the prepared statement
+    (invariant §2.6)."""

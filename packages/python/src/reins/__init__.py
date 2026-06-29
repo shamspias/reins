@@ -9,6 +9,8 @@ public surface (``Agent``, ``capability``, ``ask`` / ``run``, ...) is added from
 M1.1 onward, one milestone per release.
 """
 
-__all__ = ["__version__"]
+from reins.capability import capability
+
+__all__ = ["__version__", "capability"]
 
 __version__ = "0.0.0"
