@@ -20,3 +20,8 @@ class ReinsError(Exception):
 
 class SerializationError(ReinsError):
     """A value could not be (de)serialized: malformed, missing, or wrong-typed data."""
+
+
+class ModelError(ReinsError):
+    """A control-plane failure in the model layer: no provider configured, the
+    provider/SDK is unavailable, or the model returned unusable output."""

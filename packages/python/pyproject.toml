@@ -28,6 +28,7 @@ dev = [
     "pre-commit>=3.7",
     "pyyaml>=6.0",       # parse spec/conformance/cases/*.yaml (test-only)
 ]
+anthropic = ["anthropic>=0.40"]   # optional: the AnthropicModel adapter (M1.2)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reins"]
@@ -45,6 +46,12 @@ python_version = "3.11"
 strict = true
 files = ["src"]
 warn_unused_configs = true
+
+# The anthropic SDK is an optional extra, not installed in the dev/CI env; the
+# adapter imports it lazily. Treat it as untyped at the boundary.
+[[tool.mypy.overrides]]
+module = ["anthropic", "anthropic.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
