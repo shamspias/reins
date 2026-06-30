@@ -66,6 +66,31 @@ def test_explicit_override_beats_heuristic() -> None:
     assert sync_inventory.spec.access == Access.READ
 
 
+def test_destructive_override_beats_read_verb() -> None:
+    @capability(destructive=True)
+    def find_and_purge(days: int) -> None:
+        "Find stale records and purge them."
+
+    assert find_and_purge.spec.access == Access.DESTRUCTIVE  # override beats 'find'
+
+
+def test_reads_override_beats_destructive_verb() -> None:
+    @capability(reads=True)
+    def delete_preview(order_id: int) -> dict:
+        "Preview what a delete would remove (read-only)."
+        return {}
+
+    assert delete_preview.spec.access == Access.READ  # override beats 'delete'
+
+
+def test_conflicting_overrides_raise() -> None:
+    with pytest.raises(CapabilityError, match="both"):
+
+        @capability(reads=True, destructive=True)
+        def confused() -> None:
+            "Contradictory annotations."
+
+
 def test_decorator_arguments_set_metadata() -> None:
     @capability(destructive=True, confirm=True, idempotent=True, scope="orders")
     def wipe_table(table: str) -> None:

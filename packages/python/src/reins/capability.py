@@ -116,8 +116,19 @@ def capability(
     name: str | None = None,
     description: str | None = None,
 ) -> BoundCapability | Callable[[Callable[..., Any]], BoundCapability]:
-    """Decorate a function as a capability. Usable bare (``@capability``) or with
-    overrides (``@capability(reads=True)``)."""
+    """Decorate a function as a capability.
+
+    Usable bare (``@capability``) or with explicit annotations that override the
+    name-based classification:
+
+    - ``reads=True`` → READ and ``destructive=True`` → DESTRUCTIVE are mutually
+      exclusive overrides (setting both is an error). With neither, the access class
+      is inferred from the leading verb, defaulting to write when ambiguous (§2.4).
+    - ``confirm`` (require approval), ``idempotent`` (safe to retry), and ``scope``
+      (row-level-security tag) ride on the descriptor for the policy, approval, and
+      RLS layers.
+    - ``name`` / ``description`` override the function name and docstring.
+    """
 
     def wrap(fn: Callable[..., Any]) -> BoundCapability:
         cap_name = name or fn.__name__
@@ -142,6 +153,12 @@ def classify(name: str) -> Access:
 
 
 def _classify(name: str, *, reads: bool, destructive: bool) -> Access:
+    # Explicit overrides beat the heuristic; contradictory ones are a developer error.
+    if reads and destructive:
+        raise CapabilityError(
+            f"capability {name!r} is marked both reads=True and destructive=True",
+            hint="a capability is read-only or destructive, not both — pick one",
+        )
     if destructive:
         return Access.DESTRUCTIVE
     if reads:
