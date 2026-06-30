@@ -124,9 +124,9 @@ def capability(
     - ``reads=True`` → READ and ``destructive=True`` → DESTRUCTIVE are mutually
       exclusive overrides (setting both is an error). With neither, the access class
       is inferred from the leading verb, defaulting to write when ambiguous (§2.4).
-    - ``confirm`` (require approval), ``idempotent`` (safe to retry), and ``scope``
-      (row-level-security tag) ride on the descriptor for the policy, approval, and
-      RLS layers.
+    - ``confirm`` (require approval for writes/destructive — reads always run freely),
+      ``idempotent`` (safe to retry), and ``scope`` (row-level-security tag) ride on the
+      descriptor for the policy, approval, and RLS layers.
     - ``name`` / ``description`` override the function name and docstring.
     """
 

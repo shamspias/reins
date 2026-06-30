@@ -11,7 +11,8 @@ M1.1 onward, one milestone per release.
 
 from reins.capability import capability
 from reins.loop import Agent
+from reins.policy import AutonomyLevel
 
-__all__ = ["Agent", "__version__", "capability"]
+__all__ = ["Agent", "AutonomyLevel", "__version__", "capability"]
 
 __version__ = "0.0.0"

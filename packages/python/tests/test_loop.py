@@ -7,6 +7,7 @@ from reins.capability import BoundCapability, capability
 from reins.errors import ModelError
 from reins.loop import Agent, run_loop
 from reins.model import FakeModel
+from reins.policy import AutonomyLevel
 from reins.registry import CapabilityRegistry
 from reins.stop import GoalReached, MaxTurns
 from reins.types import FinishReason, Message, ModelResponse, Role, RunState, Usage
@@ -73,6 +74,66 @@ def test_run_write_not_executed_without_approval() -> None:
     model = FakeModel.from_script([{"call": "delete_order", "args": {"order_id": 1}}])
     report = run_loop(model, _registry(delete_order), "delete order 1", can_write=True)
     assert report.outcome == "not_executed"  # write gating is M2.x
+
+
+def test_run_executes_plain_write_under_trusted() -> None:
+    @capability
+    def update_status(order_id: int) -> str:
+        "Update an order's status."
+        return "updated"
+
+    model = FakeModel.from_script(
+        [{"call": "update_status", "args": {"order_id": 1}}, {"final": "done"}]
+    )
+    report = run_loop(
+        model, _registry(update_status), "update", can_write=True, autonomy=AutonomyLevel.TRUSTED
+    )
+    assert report.outcome == "completed"
+    assert report.executed == ("update_status",)
+
+
+def test_run_write_requires_approval_under_default() -> None:
+    model = FakeModel.from_script([{"call": "delete_order", "args": {"order_id": 1}}])
+    report = run_loop(
+        model,
+        _registry(delete_order),
+        "delete",
+        can_write=True,
+        autonomy=AutonomyLevel.APPROVED_WRITES,
+    )
+    assert report.outcome == "not_executed"
+    assert report.reason == "approval_required"
+
+
+def test_run_write_refused_under_read_only() -> None:
+    model = FakeModel.from_script([{"call": "delete_order", "args": {"order_id": 1}}])
+    report = run_loop(
+        model, _registry(delete_order), "delete", can_write=True, autonomy=AutonomyLevel.READ_ONLY
+    )
+    assert report.outcome == "refused"
+    assert report.reason == "write_in_read_only"
+
+
+def test_policy_text_never_reaches_the_model() -> None:
+    # Invariant §2.5: policy constraints are enforced in code, never sent to the model.
+    model = FakeModel.from_script([{"call": "delete_order", "args": {"order_id": 1}}])
+    run_loop(
+        model,
+        _registry(delete_order),
+        "delete order 1",
+        can_write=True,
+        autonomy=AutonomyLevel.APPROVED_WRITES,
+    )
+    shown = " ".join(m.text or "" for msgs, _caps in model.calls for m in msgs).lower()
+    for term in (
+        "autonomy",
+        "approval",
+        "policy",
+        "read_only",
+        "approved_writes",
+        "require_approval",
+    ):
+        assert term not in shown, term
 
 
 def test_agent_ask_returns_run_result() -> None:
