@@ -201,13 +201,48 @@ def load_cases(cases_dir: Path = CASES_DIR) -> list[Case]:
 def drive_case(case: Case) -> dict[str, Any]:
     """Run one case through the Reins harness and return the observed result.
 
-    Linter cases run for real as of M1.3. Golden cases still need the loop + verbs +
-    policy/approval (M1.4, M2.x); until then they raise :class:`HarnessNotImplemented`
-    and the runner reports them xfail.
+    Linter cases run as of M1.3; ask/read/budget golden cases run as of M1.4. Golden
+    cases needing approval + audit still raise :class:`HarnessNotImplemented` (M2.x).
     """
     if case.kind == "linter":
         return _drive_linter_case(case)
-    raise HarnessNotImplemented(f"golden case {case.name!r} needs the loop + policy (M1.4 / M2.x)")
+    return _drive_golden_case(case)
+
+
+def _drive_golden_case(case: Case) -> dict[str, Any]:
+    if "approvals" in case.data:
+        raise HarnessNotImplemented(f"golden case {case.name!r} needs approval + audit (M2.x)")
+    from reins.budget import Budget
+    from reins.capability import BoundCapability, classify
+    from reins.loop import run_loop
+    from reins.model import FakeModel
+    from reins.registry import CapabilityRegistry
+    from reins.types import Capability
+
+    registry = CapabilityRegistry()
+    for name in case.data.get("capabilities", []):
+        spec = Capability(
+            name=name,
+            description=f"Stub capability {name}.",
+            input_schema={"type": "object", "additionalProperties": True},
+            access=classify(name),
+        )
+        registry.register(BoundCapability(spec=spec, func=lambda **kwargs: None))
+
+    model = FakeModel.from_script(case.data["model_script"])
+    budget_spec = case.data.get("budget") or {}
+    budget = Budget(max_turns=int(budget_spec.get("max_turns", 8)))
+    report = run_loop(
+        model,
+        registry,
+        str(case.data["goal"]),
+        can_write=(case.data.get("verb") == "run"),
+        budget=budget,
+    )
+    result: dict[str, Any] = {"outcome": report.outcome, "executed": list(report.executed)}
+    if report.reason is not None:
+        result["reason"] = report.reason
+    return result
 
 
 def _drive_linter_case(case: Case) -> dict[str, Any]:

@@ -136,6 +136,11 @@ def capability(
     return wrap(func) if func is not None else wrap
 
 
+def classify(name: str) -> Access:
+    """Classify a capability by its name's leading verb (ambiguous ⇒ write, §2.4)."""
+    return _classify(name, reads=False, destructive=False)
+
+
 def _classify(name: str, *, reads: bool, destructive: bool) -> Access:
     if destructive:
         return Access.DESTRUCTIVE

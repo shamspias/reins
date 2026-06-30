@@ -10,7 +10,8 @@ M1.1 onward, one milestone per release.
 """
 
 from reins.capability import capability
+from reins.loop import Agent
 
-__all__ = ["__version__", "capability"]
+__all__ = ["Agent", "__version__", "capability"]
 
 __version__ = "0.0.0"
