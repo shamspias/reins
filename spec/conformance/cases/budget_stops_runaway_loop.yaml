@@ -1,0 +1,16 @@
+# Invariant §2.13: a model that never finishes is stopped deterministically by
+# the turn budget — a runaway loop is a bug the harness kills.
+name: budget_stops_runaway_loop
+goal: "keep looking at orders forever"
+verb: ask
+capabilities: [find_orders]
+budget: { max_turns: 3 }
+model_script:
+  - { call: find_orders, args: {} }
+  - { call: find_orders, args: {} }
+  - { call: find_orders, args: {} }
+  - { call: find_orders, args: {} }
+  - { call: find_orders, args: {} }
+expect:
+  outcome: stopped
+  reason: budget_exhausted

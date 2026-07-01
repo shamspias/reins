@@ -1,0 +1,12 @@
+# Invariant §2.2: a destructive write under run() needs approval; a denied
+# approval means it is not executed, and the attempt is still audited.
+name: destructive_requires_approval
+goal: "refund order 8842"
+verb: run
+capabilities: [get_order, refund_payment]
+model_script:
+  - { call: refund_payment, args: { order_id: 8842 } }
+approvals: deny
+expect:
+  outcome: not_executed
+  audited: true
