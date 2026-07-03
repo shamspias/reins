@@ -37,3 +37,9 @@ class ApprovalError(ReinsError):
     """The approval gate is misconfigured: ``approve=`` is neither an
     ``ApprovalHandler`` nor a callable. Raised at construction so the mistake
     surfaces before the first gated write, not as a silent deny."""
+
+
+class DisclosureError(ReinsError):
+    """Progressive disclosure is misconfigured: a registered capability collides
+    with a reserved discovery tool name. Raised at run start, before any model
+    call, so the collision cannot silently shadow either side."""

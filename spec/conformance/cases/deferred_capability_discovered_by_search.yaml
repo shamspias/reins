@@ -1,0 +1,29 @@
+# Dual progressive disclosure (M3.1, invariant §2.12): with many capabilities
+# registered, the model sees only a tiny constant discovery surface — it must
+# search, get the matches exposed, then call one directly. Discovery itself is
+# a harness-internal read: never gated, never listed in `executed`.
+name: deferred_capability_discovered_by_search
+goal: "how many refunds were issued this week?"
+verb: ask
+capabilities:
+  - find_refunds
+  - find_orders
+  - find_users
+  - find_products
+  - find_invoices
+  - find_payments
+  - find_shipments
+  - find_returns
+  - find_reviews
+  - find_carts
+  - find_coupons
+  - find_sessions
+  - find_logs
+model_script:
+  - { call: search_capabilities, args: { query: "refunds" } }
+  - { call: find_refunds, args: {} }
+  - { final: "3 refunds were issued this week." }
+expect:
+  outcome: completed
+  executed: [find_refunds]
+  audited: false

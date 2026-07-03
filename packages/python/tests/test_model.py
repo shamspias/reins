@@ -4,7 +4,7 @@ import pytest
 
 from reins.errors import ModelError
 from reins.model import FakeModel, Model, ModelParams, default_model
-from reins.types import Capability, FinishReason, Message, ModelResponse, Role, Usage
+from reins.types import FinishReason, Message, ModelResponse, Role, ToolSpec, Usage
 
 
 def _final(text: str) -> ModelResponse:
@@ -25,12 +25,12 @@ def test_fakemodel_returns_responses_in_order() -> None:
 def test_fakemodel_records_what_it_was_shown() -> None:
     fake = FakeModel(responses=[_final("hi")])
     msgs = [Message(role=Role.USER, text="hello")]
-    caps = [Capability(name="find_orders", description="Find orders.")]
-    fake.complete(msgs, caps, ModelParams())
+    tools = [ToolSpec(name="find_orders", description="Find orders.")]
+    fake.complete(msgs, tools, ModelParams())
     assert len(fake.calls) == 1
-    shown_msgs, shown_caps = fake.calls[0]
+    shown_msgs, shown_tools = fake.calls[0]
     assert shown_msgs[0].text == "hello"
-    assert shown_caps[0].name == "find_orders"
+    assert shown_tools[0].name == "find_orders"
 
 
 def test_fakemodel_exhausted_raises_hinted_error() -> None:
@@ -63,6 +63,15 @@ def test_fakemodel_is_a_model() -> None:
 
 
 def test_default_model_without_key_raises_hinted_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    for var in (
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "ZAI_API_KEY",
+        "OLLAMA_BASE_URL",
+        "VLLM_BASE_URL",
+    ):
+        monkeypatch.delenv(var, raising=False)
     with pytest.raises(ModelError, match="→"):
         default_model()

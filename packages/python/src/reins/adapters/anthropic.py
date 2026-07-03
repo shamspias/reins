@@ -17,12 +17,12 @@ from typing import Any
 from reins.errors import ModelError
 from reins.model import ModelParams
 from reins.types import (
-    Capability,
     FinishReason,
     Message,
     ModelResponse,
     Role,
     ToolCall,
+    ToolSpec,
     Usage,
 )
 
@@ -58,11 +58,11 @@ class AnthropicModel:
     def complete(
         self,
         messages: list[Message],
-        capabilities: list[Capability],
+        tools: list[ToolSpec],
         params: ModelParams,
     ) -> ModelResponse:
         system, turns = _to_anthropic_messages(messages)
-        tools = [_to_anthropic_tool(c) for c in capabilities]
+        wire_tools = [_to_anthropic_tool(t) for t in tools]
         kwargs: dict[str, Any] = {
             "model": params.model or self._model,
             "max_tokens": params.max_tokens,
@@ -70,17 +70,17 @@ class AnthropicModel:
         }
         if system:
             kwargs["system"] = system
-        if tools:
-            kwargs["tools"] = tools
+        if wire_tools:
+            kwargs["tools"] = wire_tools
         return _from_anthropic_response(self._client.messages.create(**kwargs))
 
 
-def _to_anthropic_tool(cap: Capability) -> dict[str, Any]:
-    # Only the intent surface crosses to the model — never access/confirm/scope (§2.5).
+def _to_anthropic_tool(spec: ToolSpec) -> dict[str, Any]:
+    # ToolSpec IS the intent surface — §2.5 is enforced by the type at this boundary.
     return {
-        "name": cap.name,
-        "description": cap.description,
-        "input_schema": cap.input_schema or {"type": "object", "properties": {}},
+        "name": spec.name,
+        "description": spec.description,
+        "input_schema": spec.input_schema or {"type": "object", "properties": {}},
     }
 
 
