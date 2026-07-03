@@ -198,6 +198,31 @@ for r in agent.audit.records:
 Plug in your own sink with `Agent(audit=...)` — if a write can't be audited, it
 doesn't run.
 
+## Scale without paying for it
+
+Registered 10 capabilities or 10,000? The model's base context is **byte-identical**:
+above a small threshold, Reins shows the model one `search_capabilities` tool instead
+of every schema — it discovers just the operations it needs, which then become
+directly callable. Attach a schema index and your data model works the same way:
+
+```python
+from reins import Agent, SchemaIndex, TableInfo
+
+agent = Agent(
+    capabilities=every_operation_in_your_app,   # hundreds? fine.
+    schema=SchemaIndex(tables=(
+        TableInfo("orders", "Customer orders.", ("id", "status", "total")),
+        TableInfo("refunds", "Issued refunds.", ("id", "order_id", "amount")),
+    )),
+)
+agent.ask("how many refunds this week?")
+# model: search_capabilities("refunds") → finds find_refunds → calls it. ~700 chars
+# of base context — the same whether you registered 20 operations or 20,000.
+```
+
+(The ORM adapters, next on the roadmap, will build both the capabilities and the
+schema index from your models automatically.)
+
 ## Reins vs. graph frameworks
 
 | Aspect              | Graph frameworks (LangChain / LangGraph) | Reins                                            |
@@ -226,8 +251,9 @@ before `1.0`.
 - [x] Human approval gate — previews, `[y]/[n]/[s]how`, pluggable `approve=`, bulk confirm
 - [x] Structured audit log, identity propagation, and row-level scoping
 - [x] Any model: Anthropic, OpenAI, Gemini, Groq, Z.ai/GLM, Ollama, vLLM
+- [x] On-demand capability & schema discovery — constant context at any scale
 - [ ] ORM auto-exposure (SQLAlchemy, Django) and a zero-code `reins chat <db-url>`
-- [ ] Code-mode execution and on-demand capability/schema discovery
+- [ ] Code-mode execution (the agent writes a sandboxed program)
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development

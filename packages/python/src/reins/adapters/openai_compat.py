@@ -25,12 +25,12 @@ from typing import Any
 from reins.errors import ModelError
 from reins.model import ModelParams
 from reins.types import (
-    Capability,
     FinishReason,
     Message,
     ModelResponse,
     Role,
     ToolCall,
+    ToolSpec,
     Usage,
 )
 
@@ -84,7 +84,7 @@ class OpenAICompatModel:
     def complete(
         self,
         messages: list[Message],
-        capabilities: list[Capability],
+        tools: list[ToolSpec],
         params: ModelParams,
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {
@@ -95,20 +95,20 @@ class OpenAICompatModel:
             kwargs["max_completion_tokens"] = params.max_tokens
         else:
             kwargs["max_tokens"] = params.max_tokens
-        tools = [_to_chat_tool(c) for c in capabilities]
-        if tools:
-            kwargs["tools"] = tools
+        wire_tools = [_to_chat_tool(t) for t in tools]
+        if wire_tools:
+            kwargs["tools"] = wire_tools
         return _from_chat_response(self._client.chat.completions.create(**kwargs))
 
 
-def _to_chat_tool(cap: Capability) -> dict[str, Any]:
-    # Only the intent surface crosses to the model — never access/confirm/scope (§2.5).
+def _to_chat_tool(spec: ToolSpec) -> dict[str, Any]:
+    # ToolSpec IS the intent surface — §2.5 is enforced by the type at this boundary.
     return {
         "type": "function",
         "function": {
-            "name": cap.name,
-            "description": cap.description,
-            "parameters": cap.input_schema or {"type": "object", "properties": {}},
+            "name": spec.name,
+            "description": spec.description,
+            "parameters": spec.input_schema or {"type": "object", "properties": {}},
         },
     }
 

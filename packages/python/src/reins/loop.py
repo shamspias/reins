@@ -32,6 +32,7 @@ from reins.approval import (
 from reins.audit import AuditRecord, AuditSink, MemoryAuditSink, now, redact_arguments
 from reins.budget import Budget
 from reins.capability import BoundCapability
+from reins.disclosure import Disclosure, SchemaIndex
 from reins.errors import CapabilityError
 from reins.model import Model, ModelParams, default_model, resolve_model
 from reins.policy import AutonomyLevel, Decision, DefaultPolicy, Policy, ProposedAction
@@ -109,6 +110,7 @@ class _RunEnv:
     context: Context
     can_write: bool
     autonomy: AutonomyLevel
+    disclosure: Disclosure
 
 
 def run_loop(
@@ -123,6 +125,8 @@ def run_loop(
     confirm_bulk: bool = True,
     principal: str | None = None,
     audit: AuditSink | None = None,
+    schema: SchemaIndex | None = None,
+    defer: bool | None = None,
     budget: Budget | None = None,
     params: ModelParams | None = None,
 ) -> RunReport:
@@ -139,6 +143,7 @@ def run_loop(
         context=Context(principal=principal, trace_id=trace_id),
         can_write=can_write,
         autonomy=autonomy,
+        disclosure=Disclosure(registry, schema=schema, defer=defer),
     )
     messages: list[Message] = [
         Message(role=Role.SYSTEM, text=SYSTEM_PROMPT),
@@ -165,7 +170,7 @@ def run_loop(
                 reason="budget_exhausted",
             )
 
-        resp = model.complete(messages, registry.list(), params)  # T: think
+        resp = model.complete(messages, env.disclosure.tools(), params)  # T: think
         usage = _add(usage, resp.usage)
         messages.append(resp.message)
         last = resp
@@ -225,9 +230,19 @@ def _act(
     usage: Usage,
     turn: int,
 ) -> RunReport | None:
+    # Discovery calls (search_capabilities / search_schema) are harness-internal
+    # reads: answered here, free at every autonomy level, allowed under ask() (§2.12).
+    pending: list[ToolCall] = []
+    for call in tool_calls:
+        discovery = env.disclosure.answer(call)
+        if discovery is not None:
+            messages.append(_tool_message(call.id, discovery))
+            continue
+        pending.append(call)
+
     # Resolve every requested call once; the gate and the executor share this list so
     # they cannot diverge on what a name resolves to.
-    resolved = [(call, env.registry.get(call.name)) for call in tool_calls]
+    resolved = [(call, env.registry.get(call.name)) for call in pending]
 
     # ask(): structurally read-only — refuse the whole turn if any call writes, before
     # the policy is even consulted (invariant §2.1). The gate is unreachable from here.
@@ -481,6 +496,11 @@ class Agent:
     ``"ollama:llama3.1"``, or a bare name like ``"gpt-4o"`` (see
     ``reins.model.PROVIDERS``). With no ``model`` at all, the provider is
     auto-detected from the environment on first use.
+
+    Context stays tiny at any scale (§2.12): above a small threshold the model
+    sees one ``search_capabilities`` tool instead of every schema and discovers
+    what it needs (``defer=`` forces this on/off); attach a ``schema=``
+    :class:`SchemaIndex` and the data model is likewise searched, never dumped.
     """
 
     def __init__(
@@ -494,6 +514,8 @@ class Agent:
         confirm_bulk: bool = True,
         principal: str | None = None,
         audit: AuditSink | None = None,
+        schema: SchemaIndex | None = None,
+        defer: bool | None = None,
     ) -> None:
         # Resolve strings eagerly so a typo'd provider fails at construction with
         # a hinted error, not mid-run.
@@ -507,6 +529,8 @@ class Agent:
         self._confirm_bulk = confirm_bulk
         self._principal = principal
         self._audit = audit if audit is not None else MemoryAuditSink()
+        self._schema = schema
+        self._defer = defer
         self._registry = CapabilityRegistry()
         for cap in capabilities:
             self._registry.register(cap)
@@ -548,6 +572,8 @@ class Agent:
             confirm_bulk=self._confirm_bulk,
             principal=principal if principal is not None else self._principal,
             audit=self._audit,
+            schema=self._schema,
+            defer=self._defer,
             budget=self._budget,
         )
 

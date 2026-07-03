@@ -67,6 +67,8 @@ def test_maps_tool_use_response() -> None:
 
 
 def test_sends_only_safe_capability_fields() -> None:
+    # Since M3.1 the boundary takes ToolSpec, so §2.5 is type-enforced: deriving
+    # the spec from a fully-annotated Capability drops every policy field.
     client = _Client(_Resp([_Block(type="text", text="ok")], "end_turn"))
     model = AnthropicModel(client=client)
     cap = Capability(
@@ -77,7 +79,7 @@ def test_sends_only_safe_capability_fields() -> None:
         confirm=True,
         scope="orders",
     )
-    model.complete([], [cap], ModelParams())
+    model.complete([], [cap.tool_spec()], ModelParams())
     sent_tool = client.messages.captured["tools"][0]  # type: ignore[index]
     # invariant §2.5: policy metadata is never exposed to the model
     assert set(sent_tool) == {"name", "description", "input_schema"}

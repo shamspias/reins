@@ -103,7 +103,8 @@ def test_non_object_tool_arguments_raise_hinted_model_error() -> None:
 
 
 def test_sends_only_safe_capability_fields() -> None:
-    # Invariant §2.5: policy metadata (access/confirm/scope) never crosses the wire.
+    # Invariant §2.5: policy metadata (access/confirm/scope) never crosses the wire —
+    # since M3.1 type-enforced: the boundary takes the derived ToolSpec.
     cap = Capability(
         name="delete_order",
         description="Delete an order.",
@@ -113,7 +114,7 @@ def test_sends_only_safe_capability_fields() -> None:
         scope="user",
     )
     model, client = _model(_response(content="ok"))
-    model.complete([Message(role=Role.USER, text="x")], [cap], ModelParams())
+    model.complete([Message(role=Role.USER, text="x")], [cap.tool_spec()], ModelParams())
     (tool,) = client.kwargs["tools"]
     assert tool == {
         "type": "function",

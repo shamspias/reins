@@ -18,12 +18,12 @@ from typing import Any, Protocol, runtime_checkable
 
 from reins.errors import ModelError
 from reins.types import (
-    Capability,
     FinishReason,
     Message,
     ModelResponse,
     Role,
     ToolCall,
+    ToolSpec,
     Usage,
 )
 
@@ -45,15 +45,15 @@ class Model(Protocol):
     """The single stochastic call.
 
     Implementations MUST be stateless with respect to inputs — the harness owns the
-    conversation history (OAH §5.1). The adapter is shown the available capabilities
-    but only ever sends the model their intent-level surface (name / description /
-    input schema), never the policy metadata (invariant §2.5).
+    conversation history (OAH §5.1). Since M3.1 the boundary takes
+    :class:`reins.types.ToolSpec` — the intent surface only — so policy metadata
+    cannot cross to a provider even by accident (invariant §2.5, type-enforced).
     """
 
     def complete(
         self,
         messages: list[Message],
-        capabilities: list[Capability],
+        tools: list[ToolSpec],
         params: ModelParams,
     ) -> ModelResponse: ...
 
@@ -70,15 +70,15 @@ class FakeModel:
 
     responses: list[ModelResponse]
     _index: int = 0
-    calls: list[tuple[list[Message], list[Capability]]] = field(default_factory=list)
+    calls: list[tuple[list[Message], list[ToolSpec]]] = field(default_factory=list)
 
     def complete(
         self,
         messages: list[Message],
-        capabilities: list[Capability],
+        tools: list[ToolSpec],
         params: ModelParams,
     ) -> ModelResponse:
-        self.calls.append((list(messages), list(capabilities)))
+        self.calls.append((list(messages), list(tools)))
         if self._index >= len(self.responses):
             raise ModelError(
                 f"FakeModel script exhausted after {len(self.responses)} response(s)",

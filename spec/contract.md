@@ -80,6 +80,31 @@ testable with a FakeModel.
   not an edge case. *(invariant §2.13)*
 - Code-mode is the default action interface; simple single-call mode is the
   fallback for trivial ops. *(invariant §2.11)*
+- **The model boundary carries `ToolSpec`** *(from M3.1)* — name, description,
+  input schema only. Policy metadata (`access` / `confirm` / `scope`) cannot
+  cross to a provider even by accident: the type at `Model.complete` doesn't
+  hold it. *(invariant §2.5, type-enforced)*
+
+### 4.1 Progressive disclosure *(from M3.1)*
+
+Never dump every capability schema or the whole data model into context
+*(invariant §2.12)*.
+
+- **Deferred capabilities** — above a small threshold (12; forceable on/off
+  with `defer=`), the model sees one constant-size `search_capabilities` tool
+  instead of the registry. A search's matches (bounded, best-first) are
+  reported *and exposed*: they become directly callable on the next turn. The
+  base context is **byte-identical** whether 13 or 10,000 capabilities are
+  registered.
+- **Schema-RAG** — an attached schema index is reachable only through
+  `search_schema`, which returns just the relevant tables (bounded), never the
+  whole data model.
+- Discovery calls are **harness-internal reads**: deterministic, free at every
+  autonomy level, allowed under `ask()`, never gated, never audited as writes,
+  and never listed in `executed`. Their names are reserved while disclosure is
+  active — a colliding user capability fails loudly at run start.
+- In a golden conformance case, listing **more than 12** capabilities activates
+  deferral: the scripted model must `search_capabilities` before calling one.
 
 ---
 

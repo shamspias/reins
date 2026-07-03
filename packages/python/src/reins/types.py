@@ -105,6 +105,20 @@ class ModelResponse:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolSpec:
+    """A capability's intent surface — the ONLY shape that crosses to the model.
+
+    Name, description, and input schema; never ``access`` / ``confirm`` / ``scope``.
+    ``Model.complete`` takes ``list[ToolSpec]``, so invariant §2.5 (policy metadata
+    is invisible to the model) holds by the type system, not adapter discipline.
+    """
+
+    name: str
+    description: str
+    input_schema: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class Capability:
     """Descriptor for one operation the agent may perform — DATA only in M1.1.
 
@@ -120,6 +134,12 @@ class Capability:
     confirm: bool = False
     idempotent: bool = False
     scope: str | None = None
+
+    def tool_spec(self) -> ToolSpec:
+        """The intent surface shown to the model — everything else stays harness-side."""
+        return ToolSpec(
+            name=self.name, description=self.description, input_schema=self.input_schema
+        )
 
 
 @dataclass(frozen=True, slots=True)
