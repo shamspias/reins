@@ -247,7 +247,8 @@ def _drive_golden_case(case: Case) -> dict[str, Any]:
             input_schema={"type": "object", "additionalProperties": True},
             access=classify(name),
         )
-        registry.register(BoundCapability(spec=spec, func=lambda **kwargs: None))
+        # Stubs return [] so code-mode programs can compute over them (e.g. len()).
+        registry.register(BoundCapability(spec=spec, func=lambda **kwargs: []))
 
     model = FakeModel.from_script(case.data["model_script"])
     budget_spec = case.data.get("budget") or {}

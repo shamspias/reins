@@ -198,6 +198,34 @@ for r in agent.audit.records:
 Plug in your own sink with `Agent(audit=...)` — if a write can't be audited, it
 doesn't run.
 
+## Code-mode: perfect work, near-zero tokens
+
+For anything beyond a trivial call, the agent doesn't ping-pong data through the
+model — it **writes a short program** that runs in a sandbox, calls your
+capabilities as plain functions, and prints back only the answer:
+
+```python
+# what the model writes (and you can inspect):
+overdue = find_orders(status="overdue")
+print(f"{len(overdue)} overdue orders, {sum(r['total'] for r in overdue)} owed")
+```
+
+A thousand rows flow from your function into the sandbox, get aggregated there,
+and a **single line** returns to the model. Crucially, the sandbox isolates
+computation, **never authority**: every call a program makes passes the same
+policy → approval → audit → row-level-security chain as a direct call — a
+gated write pauses at your terminal even mid-program.
+
+The default sandbox is a whitelisted-import subprocess (great for development;
+honestly labeled: not a hard security boundary). For production:
+
+```python
+from reins import Agent, DockerSandbox
+
+agent = Agent(capabilities=[...], sandbox=DockerSandbox())  # no network, read-only
+agent = Agent(capabilities=[...], mode="simple")            # or: no programs at all
+```
+
 ## Scale without paying for it
 
 Registered 10 capabilities or 10,000? The model's base context is **byte-identical**:
@@ -252,8 +280,8 @@ before `1.0`.
 - [x] Structured audit log, identity propagation, and row-level scoping
 - [x] Any model: Anthropic, OpenAI, Gemini, Groq, Z.ai/GLM, Ollama, vLLM
 - [x] On-demand capability & schema discovery — constant context at any scale
+- [x] Code-mode execution — sandboxed programs, data never transits the model
 - [ ] ORM auto-exposure (SQLAlchemy, Django) and a zero-code `reins chat <db-url>`
-- [ ] Code-mode execution (the agent writes a sandboxed program)
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development

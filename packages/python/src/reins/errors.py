@@ -43,3 +43,9 @@ class DisclosureError(ReinsError):
     """Progressive disclosure is misconfigured: a registered capability collides
     with a reserved discovery tool name. Raised at run start, before any model
     call, so the collision cannot silently shadow either side."""
+
+
+class SandboxError(ReinsError):
+    """Code-mode is misconfigured: an unavailable backend, an invalid mode, or a
+    capability colliding with the reserved ``run_program`` tool. Raised at
+    construction / run start — never mid-program."""

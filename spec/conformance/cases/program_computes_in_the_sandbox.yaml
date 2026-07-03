@@ -1,0 +1,15 @@
+# Code-mode (M3.2, invariant §2.11): the model writes a sandboxed program; the
+# capability's data stays in the sandbox and only the printed result returns.
+# The bridged call is a real capability call: listed in `executed`, and it
+# would be gated identically to a direct call if it wrote.
+name: program_computes_in_the_sandbox
+goal: "how many orders are open?"
+verb: ask
+capabilities: [find_orders]
+model_script:
+  - { program: "rows = find_orders(status='open')\nprint(len(rows))" }
+  - { final: "0 orders are open." }
+expect:
+  outcome: completed
+  executed: [find_orders]
+  audited: false

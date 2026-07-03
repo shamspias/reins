@@ -225,8 +225,8 @@ def test_model_discovers_and_uses_a_capability_by_search() -> None:
     report = run_loop(model, reg, "how many refunds?", can_write=False)
     assert report.outcome == "completed"
     assert report.executed == ("find_refunds",)  # discovery is not a user capability
-    # Turn 1: the model saw only the constant search surface.
-    assert [t.name for t in model.calls[0][1]] == ["search_capabilities"]
+    # Turn 1: the model saw only the constant base surface (search + code-mode).
+    assert [t.name for t in model.calls[0][1]] == ["search_capabilities", "run_program"]
     # Turn 2: the discovered capability is now directly callable.
     assert "find_refunds" in [t.name for t in model.calls[1][1]]
 
