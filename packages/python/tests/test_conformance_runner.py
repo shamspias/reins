@@ -9,7 +9,6 @@ import pytest
 
 from conformance_runner import (
     Case,
-    HarnessNotImplemented,
     drive_case,
     infer_kind,
     load_cases,
@@ -33,21 +32,14 @@ def test_load_cases_loads_a_valid_suite() -> None:
     assert names >= REQUIRED_CASES
 
 
-def test_approval_golden_cases_raise_until_m2() -> None:
-    cases = [c for c in load_cases() if c.kind == "golden" and "approvals" in c.data]
-    assert cases
-    for case in cases:
-        with pytest.raises(HarnessNotImplemented):
-            drive_case(case)
-
-
-def test_non_approval_golden_cases_drive_to_a_result() -> None:
-    # As of M1.4 the ask/read/budget golden cases run for real.
-    cases = [c for c in load_cases() if c.kind == "golden" and "approvals" not in c.data]
+def test_all_golden_cases_drive_to_a_result() -> None:
+    # As of M2.3 the approval cases run for real too (no more xfail on approvals).
+    cases = [c for c in load_cases() if c.kind == "golden"]
     assert cases
     for case in cases:
         result = drive_case(case)
         assert result["outcome"] in {"refused", "completed", "executed", "not_executed", "stopped"}
+        assert isinstance(result["audited"], bool)
 
 
 def test_linter_cases_drive_to_a_result() -> None:
@@ -120,6 +112,34 @@ def test_validate_rejects_unknown_reason() -> None:
         "expect": {"outcome": "refused", "reason": "budget_exhuasted"},
     }
     with pytest.raises(ValueError, match="reason"):
+        validate_case(bad, source="bad.yaml")
+
+
+def test_validate_rejects_unknown_autonomy_level() -> None:
+    bad = {
+        "name": "bad",
+        "goal": "x",
+        "verb": "run",
+        "autonomy": "yolo",
+        "capabilities": ["find"],
+        "model_script": [],
+        "expect": {"outcome": "completed"},
+    }
+    with pytest.raises(ValueError, match="autonomy"):
+        validate_case(bad, source="bad.yaml")
+
+
+def test_validate_rejects_unknown_approvals_value() -> None:
+    bad = {
+        "name": "bad",
+        "goal": "x",
+        "verb": "run",
+        "approvals": "maybe",
+        "capabilities": ["find"],
+        "model_script": [],
+        "expect": {"outcome": "completed"},
+    }
+    with pytest.raises(ValueError, match="approvals"):
         validate_case(bad, source="bad.yaml")
 
 

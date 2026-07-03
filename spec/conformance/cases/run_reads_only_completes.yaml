@@ -1,0 +1,14 @@
+# Outcome vocabulary (spec/contract.md §7.4): a run() that only reads reports
+# `completed`, not `executed` — and never touches the approval gate (the runner's
+# deny-all default gate would flip the outcome if it were consulted).
+name: run_reads_only_completes
+goal: "how many orders are stuck in processing?"
+verb: run
+capabilities: [find_orders]
+model_script:
+  - { call: find_orders, args: { status: processing } }
+  - { final: "42 orders are stuck in processing." }
+expect:
+  outcome: completed
+  executed: [find_orders]
+  audited: false

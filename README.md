@@ -108,6 +108,34 @@ def export_report(month: str) -> bytes: ...
 def deactivate_user(user_id: int) -> None: ...
 ```
 
+## Approvals: the human gate
+
+When `run()` reaches a write that needs approval, it pauses and shows you exactly
+what it wants to do before anything executes:
+
+```
+⚠ Reins wants to run a DESTRUCTIVE WRITE: refund_order(order_id=8842)
+Approve? [y]es / [n]o / [s]how
+```
+
+`[s]how` reveals the unabridged calls and arguments as JSON. The gate **fails
+closed**: denying, running headless (no terminal), or an approval handler that
+crashes all mean the write does not run — and the attempt is recorded.
+
+The terminal prompt is just the default. Plug in your own gate — any
+`request -> bool` callable or an object with an `approve` method:
+
+```python
+agent = Agent(
+    capabilities=[find_orders, refund_order],
+    approve=lambda request: request.bulk_count is None,  # e.g. auto-deny bulk writes
+)
+```
+
+Anything touching **more than one row** needs an explicit confirm at every
+autonomy level — even for agents trusted to write freely (`confirm_bulk=True`
+by default).
+
 ## Reins vs. graph frameworks
 
 | Aspect              | Graph frameworks (LangChain / LangGraph) | Reins                                            |
@@ -122,18 +150,20 @@ def deactivate_user(user_id: int) -> None: ...
 ## Status
 
 Reins is in **early development**, Python first. The core works today: typed capabilities
-derived from your functions, the agent loop, the `ask()` / `run()` safety boundary, and
-pluggable model backends. APIs may change before `1.0`.
+derived from your functions, the agent loop, the `ask()` / `run()` safety boundary,
+deterministic write policy with the autonomy ladder, the human approval gate with
+previews and bulk confirm, and pluggable model backends. APIs may change before `1.0`.
 
 ### Roadmap
 
 - [x] Typed capabilities from your functions — schema and read/write classification
 - [x] The agent loop with `ask()` / `run()` and a strict read-only boundary
 - [x] Provider-agnostic model backends (Anthropic included)
-- [ ] Policy, human approval, and audit for writes
+- [x] Deterministic write policy and the autonomy ladder
+- [x] Human approval gate — previews, `[y]/[n]/[s]how`, pluggable `approve=`, bulk confirm
+- [ ] Structured audit log, identity propagation, and row-level security
 - [ ] ORM auto-exposure (SQLAlchemy, Django) and a zero-code `reins chat <db-url>`
 - [ ] Code-mode execution and on-demand capability/schema discovery
-- [ ] Row-level security and identity propagation
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development

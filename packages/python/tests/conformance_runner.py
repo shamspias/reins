@@ -5,10 +5,12 @@ each through the Reins harness with a scripted FakeModel, asserting the case's
 ``expect`` block. The cases are the source of truth; the Go and TS packages ship
 their own thin runners over the *same* cases (CLAUDE.md §3, spec/contract.md §7).
 
-Status (M0.2): the behavior under test is delivered from M1.x onward. Until a
-case's feature exists, :func:`drive_case` raises :class:`HarnessNotImplemented`
-and the case is reported **xfail** — so ``make conformance`` runs and reports
-per-case status today, and each case flips to a real pass as its feature lands.
+Status: linter cases run as of M1.3; ask/read/budget golden cases as of M1.4;
+approval (``approvals: allow|deny``) and ``autonomy:`` golden cases as of M2.3.
+A case whose feature is not built yet makes :func:`drive_case` raise
+:class:`HarnessNotImplemented` and is reported **xfail** — so ``make conformance``
+runs and reports per-case status today, and each case flips to a real pass as its
+feature lands.
 """
 
 from dataclasses import dataclass
@@ -23,6 +25,8 @@ CASES_DIR = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "case
 
 GOLDEN_OUTCOMES = frozenset({"refused", "not_executed", "completed", "executed", "stopped"})
 GOLDEN_REASONS = frozenset({"write_in_read_only", "approval_denied", "budget_exhausted"})
+GOLDEN_AUTONOMY = frozenset({"read_only", "draft_writes", "approved_writes", "trusted"})
+APPROVAL_SCRIPTS = frozenset({"allow", "deny"})
 LINT_RESULTS = frozenset({"pass", "fail"})
 VIOLATION_CODES = frozenset(
     {"opaque_name", "missing_description", "too_many_params", "raw_response", "ambiguous_overlap"}
@@ -113,6 +117,22 @@ def _validate_golden(data: dict[str, Any], expect: dict[str, Any], source: str) 
                 f"use one of {sorted(GOLDEN_REASONS)} (or omit it)",
             )
         )
+    autonomy = data.get("autonomy")
+    if autonomy is not None and autonomy not in GOLDEN_AUTONOMY:
+        raise ValueError(
+            _hint(
+                f"{source}: autonomy {autonomy!r} is not a ladder level",
+                f"use one of {sorted(GOLDEN_AUTONOMY)} (or omit for approved_writes)",
+            )
+        )
+    approvals = data.get("approvals")
+    if approvals is not None and approvals not in APPROVAL_SCRIPTS:
+        raise ValueError(
+            _hint(
+                f"{source}: approvals {approvals!r} is not a scripted decision",
+                f"use one of {sorted(APPROVAL_SCRIPTS)} (or omit if the gate never fires)",
+            )
+        )
 
 
 def _validate_linter(data: dict[str, Any], expect: dict[str, Any], source: str) -> None:
@@ -201,8 +221,8 @@ def load_cases(cases_dir: Path = CASES_DIR) -> list[Case]:
 def drive_case(case: Case) -> dict[str, Any]:
     """Run one case through the Reins harness and return the observed result.
 
-    Linter cases run as of M1.3; ask/read/budget golden cases run as of M1.4. Golden
-    cases needing approval + audit still raise :class:`HarnessNotImplemented` (M2.x).
+    Linter cases run as of M1.3; ask/read/budget golden cases as of M1.4; approval
+    and autonomy golden cases as of M2.3.
     """
     if case.kind == "linter":
         return _drive_linter_case(case)
@@ -210,12 +230,12 @@ def drive_case(case: Case) -> dict[str, Any]:
 
 
 def _drive_golden_case(case: Case) -> dict[str, Any]:
-    if "approvals" in case.data:
-        raise HarnessNotImplemented(f"golden case {case.name!r} needs approval + audit (M2.x)")
+    from reins.approval import ApprovalRequest
     from reins.budget import Budget
     from reins.capability import BoundCapability, classify
     from reins.loop import run_loop
     from reins.model import FakeModel
+    from reins.policy import AutonomyLevel
     from reins.registry import CapabilityRegistry
     from reins.types import Capability
 
@@ -232,14 +252,30 @@ def _drive_golden_case(case: Case) -> dict[str, Any]:
     model = FakeModel.from_script(case.data["model_script"])
     budget_spec = case.data.get("budget") or {}
     budget = Budget(max_turns=int(budget_spec.get("max_turns", 8)))
+    autonomy = AutonomyLevel(str(case.data.get("autonomy", AutonomyLevel.APPROVED_WRITES.value)))
+
+    # `approvals: allow|deny` scripts the human at the gate. When the key is
+    # absent the case expects the gate never to fire — a deny-all handler makes
+    # an unexpected prompt flip the outcome and fail the case loudly.
+    approvals = case.data.get("approvals")
+
+    def scripted_gate(request: ApprovalRequest) -> bool:
+        return approvals == "allow"
+
     report = run_loop(
         model,
         registry,
         str(case.data["goal"]),
         can_write=(case.data.get("verb") == "run"),
+        autonomy=autonomy,
+        approve=scripted_gate,
         budget=budget,
     )
-    result: dict[str, Any] = {"outcome": report.outcome, "executed": list(report.executed)}
+    result: dict[str, Any] = {
+        "outcome": report.outcome,
+        "executed": list(report.executed),
+        "audited": report.audited,
+    }
     if report.reason is not None:
         result["reason"] = report.reason
     return result

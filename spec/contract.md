@@ -85,12 +85,28 @@ testable with a FakeModel.
 
 ## 5. Governance *(from M2.x)*
 
-- **Policy** — pre-action `check_actions`, post-output `check_output`. Enforced
-  in code; its constraints are **never** sent to the model. *(invariant §2.5)*
-- **Approval** — destructive ops pause for human approval with a rendered
-  preview; anything touching more than one row needs explicit confirm.
-- **Audit** — every write attempt is logged (principal, capability, args,
-  decision, timestamp; PII-redacted).
+- **Policy** *(from M2.2)* — pre-action `check_actions`, post-output
+  `check_output`. Enforced in code; its constraints are **never** sent to the
+  model. *(invariant §2.5)*
+- **Approval** *(from M2.3)* — when the policy demands approval, the run pauses
+  at an injected `ApprovalHandler` (`approve=` accepts a handler object or a
+  plain `request -> bool` callable). The handler is shown the **exact calls and
+  arguments** about to run. The default handler renders a preview on the
+  terminal and asks `[y]es / [n]o / [s]how`; `[s]how` reveals the unabridged
+  calls as JSON. The gate fails **closed**: a denied prompt, a headless run
+  (no interactive terminal), an exhausted re-prompt bound, or a handler that
+  raises all mean the write does not execute and the run ends `not_executed`
+  with reason `approval_denied`.
+- **Row-limit default / bulk confirm** *(from M2.3)* — a write whose top-level
+  argument is a list of more than one item is treated as touching that many
+  rows and needs explicit confirm **at every autonomy level**, including
+  `TRUSTED` (`confirm_bulk=True` by default). Reads never count and never
+  prompt. Real row counts arrive with the ORM adapters (M4.x); until then this
+  deterministic heuristic errs toward prompting.
+- **Audit** *(from M2.4; seed in M2.3)* — every write attempt is logged
+  (principal, capability, args, decision, timestamp; PII-redacted). As of
+  M2.3, `audited` is true whenever the approval gate recorded a decision
+  (approved or denied).
 - **Autonomy ladder** — `READ_ONLY → DRAFT_WRITES → APPROVED_WRITES (default) →
   TRUSTED`. The default never auto-executes a write. *(invariant §2.10)*
 
@@ -125,7 +141,8 @@ block). `kind:` may be set explicitly; otherwise it is inferred from shape.
 | `goal` | ✓ | the natural-language goal handed to the agent |
 | `capabilities` | ✓ | names of the capabilities available to the agent |
 | `model_script` | ✓ | the scripted FakeModel decisions (§7.5) |
-| `approvals` | — | `allow` or `deny` — simulates the human at the gate |
+| `autonomy` | — | ladder level for the run: `read_only` \| `draft_writes` \| `approved_writes` (default) \| `trusted` |
+| `approvals` | — | `allow` or `deny` — simulates the human at the gate. When absent, the runner uses a **deny-all** gate, so a case expecting `executed` also proves no prompt happened |
 | `budget` | — | stop limits, e.g. `{ max_turns: 3 }` |
 | `expect` | ✓ | the expected result (below) |
 
@@ -154,7 +171,7 @@ Outcomes:
 | outcome | meaning |
 |---|---|
 | `completed` | goal met using reads only; no write executed |
-| `executed` | a write ran (after approval) and the goal was met |
+| `executed` | a write ran (gated where the policy required it) and the goal was met |
 | `refused` | the harness refused **before** executing (e.g. a write under `ask()`) |
 | `not_executed` | a gated write was proposed but not run (approval denied) |
 | `stopped` | a stop condition (e.g. budget) halted the run |
