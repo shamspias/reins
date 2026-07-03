@@ -33,7 +33,7 @@ from reins.audit import AuditRecord, AuditSink, MemoryAuditSink, now, redact_arg
 from reins.budget import Budget
 from reins.capability import BoundCapability
 from reins.errors import CapabilityError
-from reins.model import Model, ModelParams, default_model
+from reins.model import Model, ModelParams, default_model, resolve_model
 from reins.policy import AutonomyLevel, Decision, DefaultPolicy, Policy, ProposedAction
 from reins.registry import CapabilityRegistry
 from reins.rls import scope_violation
@@ -474,13 +474,18 @@ class Agent:
     autonomy level. ``principal=`` names who the agent acts for — it reaches every
     capability's ``context``/``ctx`` parameter and scopes ``scope``-annotated
     capabilities (RLS); ``ask()``/``run()`` accept a per-call override. ``audit=``
-    plugs in a sink; the default keeps records in memory on ``agent.audit``. With
-    no ``model``, the provider is resolved from the environment on first use.
+    plugs in a sink; the default keeps records in memory on ``agent.audit``.
+
+    ``model`` may be a :class:`Model` instance or a string — ``"openai:gpt-4o"``,
+    ``"anthropic:claude-opus-4-8"``, ``"groq:llama-3.3-70b-versatile"``,
+    ``"ollama:llama3.1"``, or a bare name like ``"gpt-4o"`` (see
+    ``reins.model.PROVIDERS``). With no ``model`` at all, the provider is
+    auto-detected from the environment on first use.
     """
 
     def __init__(
         self,
-        model: Model | None = None,
+        model: Model | str | None = None,
         capabilities: Sequence[BoundCapability] = (),
         budget: Budget | None = None,
         autonomy: AutonomyLevel = AutonomyLevel.APPROVED_WRITES,
@@ -490,7 +495,9 @@ class Agent:
         principal: str | None = None,
         audit: AuditSink | None = None,
     ) -> None:
-        self._model = model
+        # Resolve strings eagerly so a typo'd provider fails at construction with
+        # a hinted error, not mid-run.
+        self._model = resolve_model(model) if isinstance(model, str) else model
         self._budget = budget or Budget()
         self._autonomy = autonomy
         self._policy = policy or DefaultPolicy()
