@@ -1,0 +1,16 @@
+# The allow side of bulk confirm (mirror of bulk_write_needs_confirm): an
+# explicitly confirmed bulk write executes, and the gate decision is audited.
+# Locks that bulk confirm is a real question, not an unconditional deny.
+name: bulk_write_confirmed_executes
+goal: "mark orders 101, 102 and 103 as shipped"
+verb: run
+autonomy: trusted
+capabilities: [update_orders]
+model_script:
+  - { call: update_orders, args: { order_ids: [101, 102, 103], status: shipped } }
+  - { final: "3 orders marked shipped." }
+approvals: allow
+expect:
+  outcome: executed
+  executed: [update_orders]
+  audited: true

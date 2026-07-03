@@ -9,4 +9,6 @@ model_script:
 approvals: deny
 expect:
   outcome: not_executed
+  reason: approval_denied
+  executed: []
   audited: true

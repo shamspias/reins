@@ -1,0 +1,17 @@
+# TRUSTED autonomy: a plain single-row write runs without prompting — gate
+# narrowly, or approval fatigue defeats the safety model. Destructive ops and
+# bulk writes still pause even here. The runner uses a deny-all gate when
+# `approvals` is absent, so an unexpected prompt flips the outcome and fails
+# this case loudly: passing proves no prompt happened.
+name: trusted_plain_write_executes
+goal: "mark order 101 as shipped"
+verb: run
+autonomy: trusted
+capabilities: [update_order]
+model_script:
+  - { call: update_order, args: { order_id: 101, status: shipped } }
+  - { final: "Order 101 marked shipped." }
+expect:
+  outcome: executed
+  executed: [update_order]
+  audited: false

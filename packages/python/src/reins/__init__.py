@@ -9,10 +9,19 @@ public surface (``Agent``, ``capability``, ``ask`` / ``run``, ...) is added from
 M1.1 onward, one milestone per release.
 """
 
+from reins.approval import ApprovalHandler, ApprovalRequest, TerminalApprovalHandler
 from reins.capability import capability
 from reins.loop import Agent
 from reins.policy import AutonomyLevel
 
-__all__ = ["Agent", "AutonomyLevel", "__version__", "capability"]
+__all__ = [
+    "Agent",
+    "ApprovalHandler",
+    "ApprovalRequest",
+    "AutonomyLevel",
+    "TerminalApprovalHandler",
+    "__version__",
+    "capability",
+]
 
 __version__ = "0.0.0"

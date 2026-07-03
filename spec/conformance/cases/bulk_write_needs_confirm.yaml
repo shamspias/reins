@@ -1,0 +1,16 @@
+# The row-limit default (M2.3): even at TRUSTED autonomy — where plain writes
+# run freely — a write touching more than one row pauses for explicit confirm,
+# and denying the confirm means nothing runs (and the attempt is audited).
+name: bulk_write_needs_confirm
+goal: "mark orders 101, 102 and 103 as shipped"
+verb: run
+autonomy: trusted
+capabilities: [update_orders]
+model_script:
+  - { call: update_orders, args: { order_ids: [101, 102, 103], status: shipped } }
+approvals: deny
+expect:
+  outcome: not_executed
+  reason: approval_denied
+  executed: []
+  audited: true

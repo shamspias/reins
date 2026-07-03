@@ -31,3 +31,9 @@ class CapabilityError(ReinsError):
     """A capability call cannot proceed: unknown name, or arguments that fail schema
     validation. Model output is untrusted — the schema is the prepared statement
     (invariant §2.6)."""
+
+
+class ApprovalError(ReinsError):
+    """The approval gate is misconfigured: ``approve=`` is neither an
+    ``ApprovalHandler`` nor a callable. Raised at construction so the mistake
+    surfaces before the first gated write, not as a silent deny."""
