@@ -79,10 +79,16 @@ _PY_TO_JSON = {str: "string", bool: "boolean", int: "integer", float: "number"}
 
 @dataclass(frozen=True, slots=True)
 class BoundCapability:
-    """A :class:`Capability` descriptor bound to its executable function."""
+    """A :class:`Capability` descriptor bound to its executable function.
+
+    ``context_param`` names the function's ``context`` / ``ctx`` parameter when it
+    has one; the registry injects the run's :class:`reins.types.Context` there on
+    every call (invariant §2.7). It never appears in the model-facing schema.
+    """
 
     spec: Capability
     func: Callable[..., Any]
+    context_param: str | None = None
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.func(*args, **kwargs)
@@ -142,9 +148,17 @@ def capability(
             idempotent=idempotent,
             scope=scope,
         )
-        return BoundCapability(spec=spec, func=fn)
+        return BoundCapability(spec=spec, func=fn, context_param=_context_param(fn))
 
     return wrap(func) if func is not None else wrap
+
+
+def _context_param(fn: Callable[..., Any]) -> str | None:
+    """The name of the function's ``context`` / ``ctx`` parameter, if it has one."""
+    for pname in inspect.signature(fn).parameters:
+        if pname in ("context", "ctx"):
+            return pname
+    return None
 
 
 def classify(name: str) -> Access:

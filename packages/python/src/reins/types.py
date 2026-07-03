@@ -53,6 +53,20 @@ class Access(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class Context:
+    """Who a run acts for, and its trace identity (invariants §2.7 and §2.8).
+
+    ``principal`` is the caller's identity (e.g. ``"user:42"``), set once at the
+    entry point and propagated by the harness into every capability call — a
+    capability that declares a ``context`` / ``ctx`` parameter receives this
+    object. The model can never set or spoof it.
+    """
+
+    principal: str | None = None
+    trace_id: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class ToolCall:
     """A model's request to call one capability, with its JSON arguments."""
 

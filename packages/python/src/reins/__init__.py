@@ -10,15 +10,21 @@ M1.1 onward, one milestone per release.
 """
 
 from reins.approval import ApprovalHandler, ApprovalRequest, TerminalApprovalHandler
+from reins.audit import AuditRecord, AuditSink, MemoryAuditSink
 from reins.capability import capability
 from reins.loop import Agent
 from reins.policy import AutonomyLevel
+from reins.types import Context
 
 __all__ = [
     "Agent",
     "ApprovalHandler",
     "ApprovalRequest",
+    "AuditRecord",
+    "AuditSink",
     "AutonomyLevel",
+    "Context",
+    "MemoryAuditSink",
     "TerminalApprovalHandler",
     "__version__",
     "capability",
