@@ -42,8 +42,10 @@ print(result.output.text)
 agent.run("refund order 8842")
 ```
 
-The model is read from your environment (`ANTHROPIC_API_KEY`), or pass one explicitly
-with `Agent(model="anthropic:claude-...")`.
+The model is auto-detected from your environment (set any of `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `ZAI_API_KEY`), or named
+explicitly: `Agent(model="openai:gpt-4o")`, `Agent(model="ollama:llama3.1")`, or just
+`Agent(model="claude-opus-4-8")`.
 
 ## Why Reins
 
@@ -56,8 +58,8 @@ with `Agent(model="anthropic:claude-...")`.
   validation, authorization, and business rules. No raw SQL against your database.
 - **Tiny and transparent.** The core is a small, readable loop you own — no hidden
   graph, no framework internals to reverse-engineer when you hit a ceiling.
-- **Provider-agnostic.** Bring any model through a thin adapter; Anthropic ships in the
-  box.
+- **Any model.** Anthropic, OpenAI, Gemini, Groq, Z.ai (GLM), and local servers
+  (Ollama, vLLM) ship in the box; anything OpenAI-compatible works too.
 
 ## How it works
 
@@ -76,16 +78,44 @@ Reins requires **Python 3.11+**.
 
 ```bash
 pip install reins                 # core (first PyPI release coming soon)
-pip install "reins[anthropic]"    # with the Anthropic model backend
+pip install "reins[anthropic]"    # with the Anthropic backend
+pip install "reins[openai]"       # with OpenAI / Gemini / Groq / Z.ai / Ollama / vLLM
 ```
 
 Until the first published release, install from source:
 
 ```bash
 git clone https://github.com/shamspias/reins
-pip install -e "reins/packages/python[anthropic]"
-export ANTHROPIC_API_KEY=sk-...
+pip install -e "reins/packages/python[anthropic,openai]"
+export ANTHROPIC_API_KEY=sk-...   # or any provider key from the table below
 ```
+
+## Bring any model
+
+One line picks the provider — everything else stays identical:
+
+```python
+Agent(model="anthropic:claude-opus-4-8")   # or just "claude-opus-4-8"
+Agent(model="openai:gpt-5.1")              # or just "gpt-5.1"
+Agent(model="gemini:gemini-2.5-flash")
+Agent(model="groq:llama-3.3-70b-versatile")
+Agent(model="zai:glm-4.6")                 # Z.ai / GLM ("glm:..." works too)
+Agent(model="ollama:llama3.1")             # local, no API key needed
+Agent(model="vllm:Qwen/Qwen2.5-72B")       # your own vLLM server
+```
+
+| Provider | Env var for the key | Notes |
+| -------- | ------------------- | ----- |
+| Anthropic | `ANTHROPIC_API_KEY` | native adapter |
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_BASE_URL` points it at any compatible proxy |
+| Google Gemini | `GEMINI_API_KEY` | via Gemini's OpenAI-compatible endpoint |
+| Groq | `GROQ_API_KEY` | |
+| Z.ai (GLM) | `ZAI_API_KEY` | |
+| Ollama | — (none) | local; `OLLAMA_BASE_URL` overrides `http://localhost:11434/v1` |
+| vLLM | `VLLM_API_KEY` (optional) | `VLLM_BASE_URL` overrides `http://localhost:8000/v1` |
+
+With no `model=` at all, Reins auto-detects from the environment in that table's
+order. Every resolution failure tells you exactly what to set next.
 
 ## The two verbs
 
@@ -136,6 +166,38 @@ Anything touching **more than one row** needs an explicit confirm at every
 autonomy level — even for agents trusted to write freely (`confirm_bulk=True`
 by default).
 
+## Identity, row-level security, and the audit trail
+
+Tell the agent who it's acting for, and every capability knows it — your existing
+per-user logic keeps working, and one user's agent can never see another's rows:
+
+```python
+from reins import Agent, Context, capability
+
+@capability(reads=True, scope="user")
+def list_my_orders(ctx: Context) -> list[dict]:
+    """List the calling user's orders."""
+    return store.orders(user=ctx.principal)      # scoped to the caller — RLS
+
+agent = Agent(capabilities=[list_my_orders], principal="user:alice")
+agent.ask("what did I order last week?")          # ctx.principal == "user:alice"
+agent.ask("…", principal="user:bob")              # per-call override (e.g. per request)
+```
+
+A `scope`-annotated capability **refuses to run** if no principal is set — fail
+closed, with a message telling you what to pass. And every write attempt — refused,
+denied, approved, or executed — lands in a structured, PII-redacted audit trail:
+
+```python
+for r in agent.audit.records:
+    print(r.timestamp, r.principal, r.decision, r.capability, r.arguments)
+# 2026-07-03 …  user:alice  approved  update_password  {'user_id': 7, 'password': '[redacted]'}
+# 2026-07-03 …  user:alice  executed  update_password  {'user_id': 7, 'password': '[redacted]'}
+```
+
+Plug in your own sink with `Agent(audit=...)` — if a write can't be audited, it
+doesn't run.
+
 ## Reins vs. graph frameworks
 
 | Aspect              | Graph frameworks (LangChain / LangGraph) | Reins                                            |
@@ -152,16 +214,18 @@ by default).
 Reins is in **early development**, Python first. The core works today: typed capabilities
 derived from your functions, the agent loop, the `ask()` / `run()` safety boundary,
 deterministic write policy with the autonomy ladder, the human approval gate with
-previews and bulk confirm, and pluggable model backends. APIs may change before `1.0`.
+previews and bulk confirm, a structured audit trail, identity propagation with
+row-level scoping, and seven model providers behind one interface. APIs may change
+before `1.0`.
 
 ### Roadmap
 
 - [x] Typed capabilities from your functions — schema and read/write classification
 - [x] The agent loop with `ask()` / `run()` and a strict read-only boundary
-- [x] Provider-agnostic model backends (Anthropic included)
 - [x] Deterministic write policy and the autonomy ladder
 - [x] Human approval gate — previews, `[y]/[n]/[s]how`, pluggable `approve=`, bulk confirm
-- [ ] Structured audit log, identity propagation, and row-level security
+- [x] Structured audit log, identity propagation, and row-level scoping
+- [x] Any model: Anthropic, OpenAI, Gemini, Groq, Z.ai/GLM, Ollama, vLLM
 - [ ] ORM auto-exposure (SQLAlchemy, Django) and a zero-code `reins chat <db-url>`
 - [ ] Code-mode execution and on-demand capability/schema discovery
 - [ ] Go and TypeScript packages, verified against one shared conformance suite

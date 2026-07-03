@@ -1,11 +1,12 @@
-"""Tests for the harness loop, stop conditions, budget, the Agent (M1.4), and the
-approval gate's integration with the loop (M2.3)."""
+"""Tests for the harness loop, stop conditions, budget, the Agent (M1.4), the
+approval gate (M2.3), and audit + identity + RLS (M2.4)."""
 
 import io
 
 import pytest
 
 from reins.approval import ApprovalRequest
+from reins.audit import REDACTED, AuditRecord, MemoryAuditSink
 from reins.budget import Budget
 from reins.capability import BoundCapability, capability
 from reins.errors import ApprovalError, ModelError
@@ -14,7 +15,7 @@ from reins.model import FakeModel
 from reins.policy import AutonomyLevel
 from reins.registry import CapabilityRegistry
 from reins.stop import GoalReached, MaxTurns
-from reins.types import FinishReason, Message, ModelResponse, Role, RunState, Usage
+from reins.types import Context, FinishReason, Message, ModelResponse, Role, RunState, Usage
 
 
 @capability
@@ -215,7 +216,9 @@ def test_run_executes_plain_write_under_trusted_without_prompting() -> None:
     assert report.outcome == "executed"
     assert report.executed == ("update_status",)
     assert gate.requests == []  # gate narrowly: no approval fatigue on trusted plain writes
-    assert report.audited is False  # no gate decision was recorded
+    # M2.4: even an ungated write attempt is audited (invariant §2.2).
+    assert report.audited is True
+    assert [r.decision for r in report.audit] == ["executed"]
 
 
 def test_run_with_reads_only_reports_completed() -> None:
@@ -389,6 +392,206 @@ def test_agent_without_model_or_key_raises(monkeypatch: pytest.MonkeyPatch) -> N
     agent = Agent(capabilities=[find_orders])
     with pytest.raises(ModelError, match="→"):
         agent.ask("anything")
+
+
+# --- audit + identity + RLS (M2.4) --------------------------------------------
+
+
+def _script_delete() -> FakeModel:
+    return FakeModel.from_script([{"call": "delete_order", "args": {"order_id": 1}}])
+
+
+def test_denied_gate_decision_is_audited_with_redacted_args() -> None:
+    @capability
+    def update_secret(order_id: int, password: str) -> None:
+        "Update an order's secret."
+
+    sink = MemoryAuditSink()
+    model = FakeModel.from_script(
+        [{"call": "update_secret", "args": {"order_id": 1, "password": "hunter2"}}]
+    )
+    report = run_loop(
+        model,
+        _registry(update_secret),
+        "update",
+        can_write=True,
+        approve=lambda r: False,
+        audit=sink,
+        principal="user:alice",
+    )
+    assert report.outcome == "not_executed"
+    (record,) = sink.records
+    assert record.decision == "approval_denied"
+    assert record.capability == "update_secret"
+    assert record.principal == "user:alice"
+    assert record.arguments == {"order_id": 1, "password": REDACTED}
+    assert record.trace_id == report.trace_id
+
+
+def test_approved_write_audits_approval_and_execution() -> None:
+    sink = MemoryAuditSink()
+    model = FakeModel.from_script(
+        [{"call": "delete_order", "args": {"order_id": 1}}, {"final": "done"}]
+    )
+    report = run_loop(
+        model,
+        _registry(delete_order),
+        "delete",
+        can_write=True,
+        approve=lambda r: True,
+        audit=sink,
+    )
+    assert report.outcome == "executed"
+    assert [r.decision for r in sink.records] == ["approved", "executed"]
+    assert report.audit == tuple(sink.records)
+
+
+def test_policy_denied_write_is_audited() -> None:
+    report = run_loop(
+        _script_delete(),
+        _registry(delete_order),
+        "delete",
+        can_write=True,
+        autonomy=AutonomyLevel.DRAFT_WRITES,
+        approve=lambda r: True,
+    )
+    assert report.outcome == "not_executed"
+    (record,) = report.audit
+    assert record.decision == "denied"
+    assert record.reason == "draft_only"
+
+
+def test_ask_refusing_a_write_is_audited() -> None:
+    # "Every write attempt is audited" includes the attempt ask() refuses (§2.2).
+    report = run_loop(_script_delete(), _registry(delete_order), "delete", can_write=False)
+    assert report.outcome == "refused"
+    (record,) = report.audit
+    assert record.decision == "refused"
+    assert record.reason == "write_in_read_only"
+
+
+def test_reads_are_not_audited() -> None:
+    model = FakeModel.from_script(
+        [{"call": "find_orders", "args": {"status": "open"}}, {"final": "2"}]
+    )
+    report = run_loop(model, _registry(find_orders), "count", can_write=False)
+    assert report.audit == ()
+    assert report.audited is False
+
+
+def test_principal_reaches_the_capability_context() -> None:
+    seen: list[Context] = []
+
+    @capability(reads=True)
+    def list_my_orders(ctx: Context) -> list[str]:
+        "List the calling user's orders."
+        seen.append(ctx)
+        return []
+
+    model = FakeModel.from_script([{"call": "list_my_orders", "args": {}}, {"final": "none"}])
+    report = run_loop(
+        model, _registry(list_my_orders), "my orders", can_write=False, principal="user:alice"
+    )
+    assert seen[0].principal == "user:alice"
+    assert seen[0].trace_id == report.trace_id
+
+
+def test_rls_scoped_capability_requires_a_principal() -> None:
+    calls: list[str] = []
+
+    @capability(reads=True, scope="user")
+    def list_my_notes(ctx: Context) -> list[str]:
+        "List the calling user's notes."
+        calls.append("ran")
+        return []
+
+    model = FakeModel.from_script([{"call": "list_my_notes", "args": {}}, {"final": "none"}])
+    report = run_loop(model, _registry(list_my_notes), "my notes", can_write=False)
+    assert calls == []  # fail closed: scoped capability never ran without identity
+    assert report.executed == ()
+    # The model saw an errors-as-data message with a → next step.
+    tool_texts = [m.text or "" for m in model.calls[1][0]]
+    assert any("→" in t and "principal" in t for t in tool_texts)
+
+
+def test_rls_cross_user_data_is_not_reachable() -> None:
+    notes = {"user:alice": ["alice's plan"], "user:bob": ["bob's secret"]}
+
+    @capability(reads=True, scope="user")
+    def list_my_notes(ctx: Context) -> list[str]:
+        "List the calling user's notes."
+        assert ctx.principal is not None
+        return notes.get(ctx.principal, [])
+
+    model = FakeModel.from_script([{"call": "list_my_notes", "args": {}}, {"final": "1 note"}])
+    run_loop(model, _registry(list_my_notes), "my notes", can_write=False, principal="user:alice")
+    shown = " ".join(m.text or "" for msgs, _ in model.calls for m in msgs)
+    assert "alice's plan" in shown
+    assert "bob's secret" not in shown  # the other user's rows never enter the run
+
+
+def test_broken_audit_sink_blocks_the_write() -> None:
+    # No audit, no action (fail closed): if the write attempt cannot be recorded,
+    # the write must not run.
+    calls: list[str] = []
+
+    @capability
+    def update_order(order_id: int) -> None:
+        "Update an order."
+        calls.append("ran")
+
+    class BrokenSink:
+        def record(self, record: AuditRecord) -> None:
+            raise OSError("disk full")
+
+    model = FakeModel.from_script(
+        [{"call": "update_order", "args": {"order_id": 1}}, {"final": "gave up"}]
+    )
+    report = run_loop(
+        model,
+        _registry(update_order),
+        "update",
+        can_write=True,
+        autonomy=AutonomyLevel.TRUSTED,
+        approve=lambda r: True,
+        audit=BrokenSink(),
+    )
+    assert calls == []
+    assert report.executed == ()
+    shown = " ".join(m.text or "" for msgs, _ in model.calls for m in msgs)
+    assert "audit" in shown and "→" in shown
+
+
+def test_agent_accumulates_audit_and_carries_principal() -> None:
+    agent = Agent(
+        model=FakeModel.from_script(
+            [{"call": "delete_order", "args": {"order_id": 1}}, {"final": "done"}]
+        ),
+        capabilities=[delete_order],
+        approve=lambda r: True,
+        principal="user:alice",
+    )
+    agent.run("delete order 1")
+    assert [r.decision for r in agent.audit.records] == ["approved", "executed"]
+    assert all(r.principal == "user:alice" for r in agent.audit.records)
+
+
+def test_run_accepts_a_per_call_principal_override() -> None:
+    seen: list[Context] = []
+
+    @capability(reads=True)
+    def whoami(ctx: Context) -> str:
+        "Report the calling user."
+        seen.append(ctx)
+        return ctx.principal or "anonymous"
+
+    agent = Agent(
+        model=FakeModel.from_script([{"call": "whoami", "args": {}}, {"final": "you"}]),
+        capabilities=[whoami],
+        principal="user:default",
+    )
+    agent.ask("who am i", principal="user:override")
+    assert seen[0].principal == "user:override"
 
 
 def test_goal_reached_stop_condition() -> None:

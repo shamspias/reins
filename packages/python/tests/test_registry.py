@@ -92,3 +92,78 @@ def test_extra_args_rejected_when_schema_omits_additional_properties() -> None:
     reg.register(BoundCapability(spec=spec, func=lambda a: a))
     res = reg.call("probe", {"a": "x", "extra": 1})
     assert not res.ok
+
+
+def test_call_injects_context_into_a_ctx_parameter() -> None:
+    from reins.types import Context
+
+    seen: list[Context] = []
+
+    @capability(reads=True)
+    def whoami(ctx: Context) -> str:
+        "Report the calling user."
+        seen.append(ctx)
+        return ctx.principal or "anonymous"
+
+    reg = CapabilityRegistry()
+    reg.register(whoami)
+    result = reg.call("whoami", {}, context=Context(principal="user:7"))
+    assert result.ok and result.value == "user:7"
+    assert seen[0].principal == "user:7"
+
+
+def test_call_without_context_injects_an_anonymous_context() -> None:
+    from reins.types import Context
+
+    @capability(reads=True)
+    def whoami(context: Context) -> str | None:
+        "Report the calling user."
+        return context.principal
+
+    reg = CapabilityRegistry()
+    reg.register(whoami)
+    result = reg.call("whoami", {})
+    assert result.ok and result.value is None
+
+
+def test_call_scoped_capability_without_principal_is_hinted_error() -> None:
+    from reins.types import Context
+
+    ran: list[str] = []
+
+    @capability(reads=True, scope="user")
+    def list_my_notes(ctx: Context) -> list[str]:
+        "List the calling user's notes."
+        ran.append("x")
+        return []
+
+    reg = CapabilityRegistry()
+    reg.register(list_my_notes)
+    result = reg.call("list_my_notes", {})
+    assert result.ok is False
+    assert ran == []  # fail closed: user code never ran
+    assert result.error is not None and "→" in result.error
+
+
+def test_injected_context_beats_a_model_supplied_context_argument() -> None:
+    # The model must never be able to spoof identity (§2.7): even when a lax
+    # schema lets a "ctx" argument through, the harness's context wins.
+    from reins.types import Capability as CapSpec
+    from reins.types import Context
+
+    seen: list[Context] = []
+
+    def whoami(ctx: Context) -> str:
+        seen.append(ctx)
+        return ctx.principal or "anonymous"
+
+    spec = CapSpec(
+        name="whoami",
+        description="Report the calling user.",
+        input_schema={"type": "object", "additionalProperties": True},
+    )
+    reg = CapabilityRegistry()
+    reg.register(BoundCapability(spec=spec, func=whoami, context_param="ctx"))
+    result = reg.call("whoami", {"ctx": "user:spoofed"}, context=Context(principal="user:real"))
+    assert result.ok
+    assert seen[0].principal == "user:real"

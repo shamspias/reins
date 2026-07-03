@@ -14,4 +14,4 @@ model_script:
 expect:
   outcome: executed
   executed: [update_order]
-  audited: false
+  audited: true  # M2.4: every write attempt is audited, even ungated ones

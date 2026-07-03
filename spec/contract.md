@@ -103,10 +103,20 @@ testable with a FakeModel.
   `TRUSTED` (`confirm_bulk=True` by default). Reads never count and never
   prompt. Real row counts arrive with the ORM adapters (M4.x); until then this
   deterministic heuristic errs toward prompting.
-- **Audit** *(from M2.4; seed in M2.3)* — every write attempt is logged
-  (principal, capability, args, decision, timestamp; PII-redacted). As of
-  M2.3, `audited` is true whenever the approval gate recorded a decision
-  (approved or denied).
+- **Audit** *(from M2.4)* — **every write attempt** emits a structured record:
+  principal, capability, arguments (PII-redacted by key), access class,
+  decision (`refused` | `denied` | `approved` | `approval_denied` |
+  `executed`), reason, timestamp, trace id. Records go to a pluggable sink
+  (in-memory by default). Auditing is part of the gate chain: a write that
+  cannot be recorded does **not** run (no audit, no action — fail closed).
+  Reads are not audited. `audited` in a run result means at least one record
+  was written.
+- **Identity & RLS** *(from M2.4)* — the principal set at the entry point
+  propagates as a `Context` into every capability call (a `context`/`ctx`
+  parameter receives it; the harness's context always beats anything
+  model-supplied). A `scope`-annotated capability refuses to run without a
+  principal (fail closed). Row filtering itself lives in the capability's own
+  code (or the ORM adapters, M4.x).
 - **Autonomy ladder** — `READ_ONLY → DRAFT_WRITES → APPROVED_WRITES (default) →
   TRUSTED`. The default never auto-executes a write. *(invariant §2.10)*
 
