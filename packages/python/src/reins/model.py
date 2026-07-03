@@ -90,8 +90,9 @@ class FakeModel:
 
     @classmethod
     def from_script(cls, steps: list[dict[str, Any]]) -> FakeModel:
-        """Build a FakeModel from compact steps: each is a capability call
-        (``{"call": name, "args": {...}}``) or a final answer (``{"final": text}``)."""
+        """Build a FakeModel from compact steps: a capability call
+        (``{"call": name, "args": {...}}``), a code-mode program
+        (``{"program": source}``), or a final answer (``{"final": text}``)."""
         responses: list[ModelResponse] = []
         for i, step in enumerate(steps):
             if "final" in step:
@@ -105,10 +106,19 @@ class FakeModel:
                 )
                 message = Message(role=Role.ASSISTANT, tool_calls=[call])
                 reason = FinishReason.TOOL_CALLS
+            elif "program" in step:
+                call = ToolCall(
+                    id=f"call_{i}",
+                    name="run_program",
+                    arguments={"code": str(step["program"])},
+                )
+                message = Message(role=Role.ASSISTANT, tool_calls=[call])
+                reason = FinishReason.TOOL_CALLS
             else:
                 raise ModelError(
-                    f"FakeModel step {i} has neither 'call' nor 'final'",
-                    hint="use {'call': name, 'args': {...}} or {'final': text}",
+                    f"FakeModel step {i} has neither 'call', 'program', nor 'final'",
+                    hint="use {'call': name, 'args': {...}}, {'program': source}, "
+                    "or {'final': text}",
                 )
             responses.append(ModelResponse(message=message, finish_reason=reason, usage=Usage()))
         return cls(responses=responses)

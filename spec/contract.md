@@ -78,8 +78,26 @@ testable with a FakeModel.
   control-plane failures raise (typed).
 - Budgets (token / turn / time) are stop conditions: a runaway loop is a bug,
   not an edge case. *(invariant §2.13)*
-- Code-mode is the default action interface; simple single-call mode is the
-  fallback for trivial ops. *(invariant §2.11)*
+- **Code-mode is the default action interface** *(from M3.2, invariant §2.11)* —
+  the model may call `run_program` with a short Python program; capabilities are
+  plain functions inside it (also importable from a `capabilities` module).
+  Intermediate data stays in the sandbox; only the program's printed output
+  (bounded) returns to context. Direct single tool-calls remain available for
+  trivial ops; `mode="simple"` removes `run_program` entirely (its name is
+  reserved in code mode).
+  - **The sandbox isolates computation, never authority:** every capability
+    call a program makes crosses back into the harness and is gated exactly
+    like a direct call — the `ask()` read-only wall, policy by autonomy,
+    approval + bulk confirm, audit (no audit, no action), RLS, and schema
+    validation, per call. A blocked call surfaces *inside* the program as a
+    catchable `CapabilityError`; bridge-executed capabilities appear in
+    `executed`.
+  - Programs are bounded: source length, wall-clock timeout, per-program
+    capability-call budget, and returned output size. The program's runtime
+    has whitelisted stdlib imports and no `open`/`exec`/`eval`/`input`; the
+    subprocess tier is an isolation aid honestly labeled as not a hard
+    boundary — production uses the Docker tier (no network, read-only,
+    resource-limited). *(invariant §2.9)*
 - **The model boundary carries `ToolSpec`** *(from M3.1)* — name, description,
   input schema only. Policy metadata (`access` / `confirm` / `scope`) cannot
   cross to a provider even by accident: the type at `Model.complete` doesn't
@@ -222,9 +240,10 @@ Reason codes (used with `refused` / `not_executed` / `stopped`):
 ### 7.5 The FakeModel
 
 `model_script` is the deterministic sequence of decisions a model would make.
-Each step is either:
+Each step is one of:
 
-- `{ call: <name>, args: { ... } }` — request a capability call, or
+- `{ call: <name>, args: { ... } }` — request a capability call,
+- `{ program: "<source>" }` — request a code-mode program run *(from M3.2)*, or
 - `{ final: "<text>" }` — produce the final answer.
 
 The harness — **not** the script — decides whether a requested call is allowed

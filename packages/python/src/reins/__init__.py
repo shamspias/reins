@@ -15,6 +15,7 @@ from reins.capability import capability
 from reins.disclosure import SchemaIndex, TableInfo
 from reins.loop import Agent
 from reins.policy import AutonomyLevel
+from reins.sandbox import DockerSandbox, Sandbox, SubprocessSandbox
 from reins.types import Context, ToolSpec
 
 __all__ = [
@@ -25,8 +26,11 @@ __all__ = [
     "AuditSink",
     "AutonomyLevel",
     "Context",
+    "DockerSandbox",
     "MemoryAuditSink",
+    "Sandbox",
     "SchemaIndex",
+    "SubprocessSandbox",
     "TableInfo",
     "TerminalApprovalHandler",
     "ToolSpec",
