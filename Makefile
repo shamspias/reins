@@ -51,7 +51,7 @@ types:
 	cd $(PKG) && $(MYPY) src
 
 test:
-	cd $(PKG) && $(PYTEST)
+	cd $(PKG) && $(PYTEST) --cov=reins --cov-report=term-missing --cov-fail-under=90
 
 # Run the language-neutral conformance cases via the Python adapter. Cases xfail
 # until their feature is built (spec/contract.md §7.6); -v -rxX reports per-case

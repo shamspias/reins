@@ -388,11 +388,13 @@ the trace, just like the audit log.
 
 ## Status
 
-Reins is in **early development**, Python first. The core works today: typed capabilities
-derived from your functions, the agent loop, the `ask()` / `run()` safety boundary,
-deterministic write policy with the autonomy ladder, the human approval gate with
-previews and bulk confirm, a structured audit trail, identity propagation with
-row-level scoping, and seven model providers behind one interface. APIs may change
+Reins is at its first **Python alpha** (`0.1.0a1`). Everything below works today:
+typed capabilities derived from your functions or ORM, the `ask()` / `run()` safety
+boundary, deterministic write policy with the autonomy ladder, the human approval
+gate with previews and bulk confirm, a structured audit trail, identity propagation
+with row-level scoping, code-mode in a sandbox, on-demand discovery, budgets, the
+zero-code CLI, instant web integration, and seven model providers behind one
+interface — all under a coverage-gated, `mypy --strict` build. APIs may change
 before `1.0`.
 
 ### Roadmap
@@ -429,6 +431,7 @@ the workflow and conventions.
   sandbox, or audit sink.
 - **[`examples/fastapi_sqlalchemy/`](examples/fastapi_sqlalchemy/)** — a complete app
   (`make demo`, and a real FastAPI server).
+- **[SECURITY.md](SECURITY.md)** — the threat model and a production deployment checklist.
 
 ## License
 
