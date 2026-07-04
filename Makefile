@@ -63,9 +63,9 @@ conformance:
 check: lint types test conformance
 	@echo ">> check: all green"
 
-# The flagship example (examples/fastapi_sqlalchemy) is delivered in M4.5.
+# The flagship example: a deterministic end-to-end walkthrough (FakeModel, no key).
 demo:
-	@echo ">> demo: the flagship example arrives in M4.5 (examples/fastapi_sqlalchemy)"
+	$(PY) -m examples.fastapi_sqlalchemy.demo
 
 clean:
 	rm -rf $(PKG)/.venv

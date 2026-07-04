@@ -17,6 +17,19 @@ expose your app, and the agent operates it.
 > OpenAPI specs strip away — which is exactly where text-to-SQL and auto-generated tool
 > layers lose their reliability.
 
+## See it all at once
+
+```bash
+git clone https://github.com/shamspias/reins && cd reins
+make setup && make demo
+```
+
+`make demo` runs the flagship example (`examples/fastapi_sqlalchemy/`) — no API
+key needed. It auto-exposes a shop's SQLAlchemy models, answers a read question,
+scopes orders per logged-in user, pauses a write at an approval prompt, and prints
+the audit trail. `examples/fastapi_sqlalchemy/app.py` is the same agent as a real
+FastAPI server with the `<reins-chat>` widget.
+
 ## No code at all: point it at a database
 
 Already have a database? Operate it from your terminal — no models, no Python:
@@ -359,7 +372,7 @@ before `1.0`.
 - [x] SQLAlchemy **and Django** auto-exposure — `Agent.from_orm(...)`, zero capabilities
 - [x] Zero-code CLI — `reins chat` / `ask` / `inspect <db-url>` and `from_module`
 - [x] Instant web integration — `reins.endpoint`, `<reins-chat>`, session-identity → RLS
-- [ ] A flagship end-to-end example (FastAPI + SQLAlchemy, gated writes)
+- [x] A flagship end-to-end example (FastAPI + SQLAlchemy, gated writes) — `make demo`
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development
