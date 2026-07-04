@@ -41,9 +41,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "inspect":
             return cmd_inspect(args.db_url, can_write=args.write)
         if args.command == "ask":
-            return cmd_ask(args.db_url, args.question, model=model)
+            return cmd_ask(args.db_url, args.question, model=model, trace=args.trace)
         if args.command == "chat":
-            return cmd_chat(args.db_url, model=model)
+            return cmd_chat(args.db_url, model=model, trace=args.trace)
     except ReinsError as exc:  # hinted, user-facing — no stack trace as the last word
         print(f"reins: {exc}", file=sys.stderr)
         return 1
@@ -70,10 +70,12 @@ def _build_parser() -> argparse.ArgumentParser:
     ask.add_argument("db_url", help="a SQLAlchemy database URL")
     ask.add_argument("question", help="the question, in plain language")
     ask.add_argument("--model", help="model spec, e.g. openai:gpt-4o (default: from env)")
+    ask.add_argument("--trace", action="store_true", help="also print what the agent did")
 
     chat = sub.add_parser("chat", help="an interactive read-only Q&A session")
     chat.add_argument("db_url", help="a SQLAlchemy database URL")
     chat.add_argument("--model", help="model spec, e.g. openai:gpt-4o (default: from env)")
+    chat.add_argument("--trace", action="store_true", help="print what the agent did each turn")
     return parser
 
 
@@ -97,12 +99,16 @@ def cmd_ask(
     question: str,
     *,
     model: Model | None = None,
+    trace: bool = False,
     out: Printer = print,
 ) -> int:
     """Answer one read-only question against the reflected database."""
     agent = _agent_from_url(db_url, model=model)
     result = agent.ask(question)
     out(result.output.text or "(no answer)")
+    if trace:
+        out("")
+        out(agent.explain())
     return 0
 
 
@@ -110,19 +116,21 @@ def cmd_chat(
     db_url: str,
     *,
     model: Model | None = None,
+    trace: bool = False,
     input_fn: Callable[[str], str] = input,
     out: Printer = print,
 ) -> int:
     """Interactive read-only Q&A loop over the reflected database."""
     agent = _agent_from_url(db_url, model=model)
     out(f"Connected to {db_url}. Ask a question — 'exit' or Ctrl-D to quit.")
-    return repl(agent, input_fn=input_fn, out=out)
+    return repl(agent, trace=trace, input_fn=input_fn, out=out)
 
 
 def repl(
     agent: Agent,
     *,
     write: bool = False,
+    trace: bool = False,
     principal: str | None = None,
     input_fn: Callable[[str], str] = input,
     out: Printer = print,
@@ -130,7 +138,8 @@ def repl(
     """An interactive prompt over an existing agent — the ``reins.cli(agent)`` loop.
 
     Read-only by default (``ask()``); ``write=True`` uses ``run()`` so gated
-    writes prompt for approval inline. ``input_fn`` / ``out`` are injectable.
+    writes prompt for approval inline. ``trace=True`` prints ``agent.explain()``
+    after each answer. ``input_fn`` / ``out`` are injectable.
     """
     verb = agent.run if write else agent.ask
     while True:
@@ -146,6 +155,8 @@ def repl(
             return 0
         try:
             out(verb(question, principal=principal).output.text or "(no answer)")
+            if trace:
+                out(agent.explain())
         except ReinsError as exc:
             out(f"error: {exc}")
 

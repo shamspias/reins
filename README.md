@@ -113,7 +113,9 @@ identically for SQLAlchemy and Django.
 - **You hold the reins.** Reins runs *your* functions, so it inherits your existing
   validation, authorization, and business rules. No raw SQL against your database.
 - **Tiny and transparent.** The core is a small, readable loop you own — no hidden
-  graph, no framework internals to reverse-engineer when you hit a ceiling.
+  graph, no framework internals to reverse-engineer when you hit a ceiling. And
+  `agent.explain()` shows exactly what it did: the code it wrote, every call, each
+  result.
 - **Any model.** Anthropic, OpenAI, Gemini, Groq, Z.ai (GLM), and local servers
   (Ollama, vLLM) ship in the box; anything OpenAI-compatible works too.
 
@@ -337,6 +339,24 @@ agent.ask("how many refunds this week?")
 
 (The ORM adapters, next on the roadmap, will build both the capabilities and the
 schema index from your models automatically.)
+
+## Never a black box
+
+Ask what the agent just did and get a straight answer — the operations it found,
+the code it wrote, every call and its result, each approval decision:
+
+```python
+agent.run("cancel order ORD-2")
+print(agent.explain())
+# ── reins trace ──
+# outcome: executed  ·  turns: 2
+# ⚠ approval: update_order: approved (approval_required)
+# • call: update_order(ref='ORD-2', status='cancelled')
+# answer: Order ORD-2 has been cancelled.
+```
+
+`reins ask <db-url> "…" --trace` prints the same. Arguments are PII-redacted in
+the trace, just like the audit log.
 
 ## Reins vs. graph frameworks
 

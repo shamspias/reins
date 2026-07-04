@@ -61,6 +61,7 @@ from reins.types import (
     RunState,
     ToolCall,
     ToolSpec,
+    TraceEvent,
     Usage,
 )
 
@@ -112,7 +113,14 @@ class RunReport:
     audited: bool = False
     audit: tuple[AuditRecord, ...] = ()
     compactions: int = 0
+    trace: tuple[TraceEvent, ...] = ()
     trace_id: str = ""
+
+    def explain(self) -> str:
+        """A readable account of the run — chosen ops, code, calls, results (M5.1)."""
+        from reins.explain import render
+
+        return render(self)
 
 
 @dataclass(slots=True)
@@ -131,6 +139,7 @@ class _Tally:
     wrote: bool = False
     audit: list[AuditRecord] = field(default_factory=list)
     compactions: int = 0
+    trace: list[TraceEvent] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,6 +318,8 @@ def _act(
     for call in tool_calls:
         discovery = env.disclosure.answer(call)
         if discovery is not None:
+            query = call.arguments.get("query", "")
+            _trace(tally, "search", f"{call.name}({query!r})", ok=discovery.ok)
             messages.append(_tool_message(call.id, discovery))
             continue
         if env.mode == "code" and call.name == RUN_PROGRAM:
@@ -327,6 +338,12 @@ def _act(
             if cap is not None and cap.spec.access is not Access.READ:
                 action = ProposedAction(call=call, capability=cap.spec)
                 _audit_action(env, tally, action, "refused", "write_in_read_only")
+                _trace(
+                    tally,
+                    "refused",
+                    f"{call.name!r} would write, but this is a read-only ask()",
+                    ok=False,
+                )
                 return _report(
                     "refused",
                     output=_synthetic(
@@ -353,6 +370,7 @@ def _act(
                 for action in proposed:
                     if action.capability.access is not Access.READ:
                         _audit_action(env, tally, action, "denied", verdict.reason)
+                _trace(tally, "denied", f"policy denied ({verdict.reason})", ok=False)
                 outcome = "refused" if verdict.reason == "write_in_read_only" else "not_executed"
                 return _report(
                     outcome,
@@ -413,6 +431,7 @@ def _act(
             tally.wrote = True  # invoked write code may have side effects even on error
         result = env.registry.call(call.name, call.arguments, context=env.context)
         tally.executed.append(call.name)
+        _trace(tally, "call", _render_call(call.name, call.arguments), ok=result.ok)
         messages.append(_tool_message(call.id, result))
     return None
 
@@ -443,6 +462,8 @@ def _gate_turn(
     approved, failure = _decide(env.gate, request)
     decision = "approved" if approved else "approval_denied"
     recorded = [_audit_action(env, tally, a, decision, reason) for a in request.actions]
+    names = ", ".join(a.call.name for a in request.actions)
+    _trace(tally, "approval", f"{names}: {decision} ({reason})", ok=approved)
     if approved and all(recorded):
         return None
     if approved:  # approved but unrecordable: no audit, no action (§2.2)
@@ -498,9 +519,11 @@ def _run_program(env: _RunEnv, tally: _Tally, call: ToolCall) -> CapabilityResul
             "\n  → split the work into smaller programs",
         )
     names = [cap.name for cap in env.registry.list()]
+    _trace(tally, "program", code)
     outcome = env.sandbox.run(
         code, names, lambda name, arguments: _bridge_call(env, tally, name, arguments)
     )
+    _trace(tally, "output", outcome.output or outcome.error or "(no output)", ok=outcome.ok)
     if outcome.ok:
         return CapabilityResult(
             ok=True,
@@ -555,6 +578,7 @@ def _bridge_call(
             approved, failure = _decide(env.gate, request)
             decision = "approved" if approved else "approval_denied"
             recorded = _audit_action(env, tally, action, decision, reason)
+            _trace(tally, "approval", f"{name}: {decision} ({reason})", ok=approved)
             if not approved:
                 detail = f" ({failure})" if failure else ""
                 return CapabilityResult(
@@ -570,10 +594,12 @@ def _bridge_call(
                 )
     violation = scope_violation(cap.spec, env.context)
     if violation is not None:
+        _trace(tally, "call", f"{name} blocked (scope)", ok=False)
         return CapabilityResult(ok=False, error=violation)
     try:
         env.registry.validate(name, arguments)
     except CapabilityError as exc:
+        _trace(tally, "call", f"{name} rejected (invalid args)", ok=False)
         return CapabilityResult(ok=False, error=str(exc))
     if cap.spec.access is not Access.READ:
         # can_write is guaranteed here: a write under ask() was refused above.
@@ -586,6 +612,7 @@ def _bridge_call(
         tally.wrote = True
     result = env.registry.call(name, arguments, context=env.context)
     tally.executed.append(name)
+    _trace(tally, "call", _render_call(name, arguments), ok=result.ok)
     return result
 
 
@@ -658,8 +685,20 @@ def _report(
         audited=bool(tally.audit),
         audit=tuple(tally.audit),
         compactions=tally.compactions,
+        trace=tuple(tally.trace),
         trace_id=trace_id,
     )
+
+
+def _trace(tally: _Tally, kind: str, detail: str, *, ok: bool = True) -> None:
+    tally.trace.append(TraceEvent(kind=kind, detail=detail, ok=ok))
+
+
+def _render_call(name: str, arguments: dict[str, Any]) -> str:
+    """A trace-safe rendering of a call: name + PII-redacted args."""
+    redacted = redact_arguments(arguments)
+    args = ", ".join(f"{k}={v!r}" for k, v in redacted.items())
+    return f"{name}({args})"
 
 
 def _tool_message(call_id: str, result: CapabilityResult) -> Message:
@@ -756,6 +795,7 @@ class Agent:
             )
         self._mode = mode
         self._sandbox = sandbox
+        self._last_report: RunReport | None = None
         self._registry = CapabilityRegistry()
         for cap in capabilities:
             self._registry.register(cap)
@@ -847,6 +887,20 @@ class Agent:
         """This agent's audit sink (default: in-memory, see ``.records``)."""
         return self._audit
 
+    @property
+    def last_report(self) -> RunReport | None:
+        """The full :class:`RunReport` of the most recent run (``None`` before any)."""
+        return self._last_report
+
+    def explain(self) -> str:
+        """A readable account of the last run — chosen ops, code, calls, results (M5.1)."""
+        if self._last_report is None:
+            raise ReinsError(
+                "nothing to explain yet — no run has happened",
+                hint="call agent.ask(...) or agent.run(...) first",
+            )
+        return self._last_report.explain()
+
     def ask(self, goal: str, *, principal: str | None = None) -> RunResult:
         """Read-only: accomplish ``goal`` using only read capabilities."""
         return _to_run_result(
@@ -868,7 +922,7 @@ class Agent:
         principal: str | None = None,
     ) -> RunReport:
         model = self._model if self._model is not None else default_model()
-        return run_loop(
+        report = run_loop(
             model,
             self._registry,
             goal,
@@ -886,6 +940,8 @@ class Agent:
             pricing=self._pricing,
             budget=self._budget,
         )
+        self._last_report = report  # for agent.explain()
+        return report
 
 
 def _to_run_result(report: RunReport) -> RunResult:
