@@ -100,7 +100,7 @@ func TestBudgetStopsALoopingModel(t *testing.T) {
 
 func TestAgentAskReturnsRunResult(t *testing.T) {
 	model := NewFakeModel(FinalResponse("hello"))
-	agent, err := NewAgent(model, findOrders())
+	agent, err := NewAgent(model, WithCapabilities(findOrders()))
 	if err != nil {
 		t.Fatalf("new agent: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestAgentAskReturnsRunResult(t *testing.T) {
 }
 
 func TestNewAgentRejectsDuplicateCapability(t *testing.T) {
-	_, err := NewAgent(NewFakeModel(), findOrders(), findOrders())
+	_, err := NewAgent(NewFakeModel(), WithCapabilities(findOrders(), findOrders()))
 	if err == nil || !strings.Contains(err.Error(), "→") {
 		t.Errorf("duplicate registration should be a hinted error, got %v", err)
 	}

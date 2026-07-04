@@ -77,6 +77,9 @@ func (r *CapabilityRegistry) Call(name string, args map[string]any, ctx Context)
 		}
 		return CapabilityResult{OK: false, Error: fmt.Sprintf("no capability named %q\n  → %s", name, fix)}
 	}
+	if violation, blocked := scopeViolation(cap.Spec, ctx); blocked { // RLS before anything runs (§2.8)
+		return CapabilityResult{OK: false, Error: violation}
+	}
 	if err := validateArgs(cap.Spec.InputSchema, args, name); err != nil {
 		return CapabilityResult{OK: false, Error: err.Error()}
 	}
