@@ -7,15 +7,17 @@
 
 PKG  := packages/python
 VBIN := $(PKG)/.venv/bin
+GODIR := packages/go
 
 # Prefer the project venv's tools. abspath keeps the path valid after `cd $(PKG)`.
 PY     := $(if $(wildcard $(VBIN)/python),$(abspath $(VBIN)/python),python3)
 RUFF   := $(if $(wildcard $(VBIN)/ruff),$(abspath $(VBIN)/ruff),ruff)
 MYPY   := $(if $(wildcard $(VBIN)/mypy),$(abspath $(VBIN)/mypy),mypy)
 PYTEST := $(if $(wildcard $(VBIN)/pytest),$(abspath $(VBIN)/pytest),pytest)
+GO     := go
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint types test conformance check demo clean
+.PHONY: help setup lint types test conformance check demo clean go-lint go-test go-check
 
 help:
 	@echo "Reins — make targets:"
@@ -24,8 +26,9 @@ help:
 	@echo "  types        mypy --strict on src/"
 	@echo "  test         pytest (happy + unhappy paths)"
 	@echo "  conformance  run spec/conformance (linter + golden cases)"
-	@echo "  check        lint + types + test + conformance   <- the gate"
+	@echo "  check        lint + types + test + conformance   <- the Python gate"
 	@echo "  demo         run the flagship example end-to-end"
+	@echo "  go-check     gofmt + go vet + go test           <- the Go gate (Phase 6)"
 	@echo "  clean        remove the local venv and caches"
 
 setup:
@@ -62,6 +65,18 @@ conformance:
 
 check: lint types test conformance
 	@echo ">> check: all green"
+
+# The Go port (Phase 6). Kept a separate gate from `check` so the Python CI job
+# needs no Go toolchain and vice versa; a dedicated CI job runs `go-check`.
+go-lint:
+	cd $(GODIR) && test -z "$$(gofmt -l .)" || { echo "gofmt needs to run on:"; gofmt -l .; exit 1; }
+	cd $(GODIR) && $(GO) vet ./...
+
+go-test:
+	cd $(GODIR) && $(GO) test ./...
+
+go-check: go-lint go-test
+	@echo ">> go-check: all green"
 
 # The flagship example: a deterministic end-to-end walkthrough (FakeModel, no key).
 demo:

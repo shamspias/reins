@@ -15,5 +15,15 @@ jobs:
           python-version: "3.11"
       - name: Install deps
         run: make setup
-      - name: Run the gate
+      - name: Run the Python gate
         run: make check
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: Run the Go gate
+        run: make go-check
