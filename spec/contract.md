@@ -337,6 +337,14 @@ Each step is one of:
 - `{ program: "<source>" }` — request a code-mode program run *(from M3.2)*, or
 - `{ final: "<text>" }` — produce the final answer.
 
+A `{ program }` step carries **language-specific source** (the program the model
+would write in that runtime's language), so it is the one non-neutral step: a
+port whose code-mode runs a different language skips `{ program }` golden cases
+in its conformance runner (with a recorded reason) and validates code-mode with
+native tests instead. Every other step and the whole `expect` vocabulary are
+language-neutral and must pass in every port. The Go runner (M6.5) passes all 13
+neutral cases and skips the one `{ program }` case.
+
 The harness — **not** the script — decides whether a requested call is allowed
 (policy, verb, approval). The script only encodes what the model *wants*; the
 contract is about what the harness *does* with that. This is the determinism

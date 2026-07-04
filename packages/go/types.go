@@ -130,6 +130,19 @@ type RunState struct {
 	LastResponse    *ModelResponse `json:"last_response,omitempty"`
 }
 
+// TableInfo describes one table (or model) in the application's data model, for
+// progressive disclosure (schema-RAG).
+type TableInfo struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Columns     []string `json:"columns,omitempty"`
+}
+
+// SchemaIndex is the searchable data model — populated by hand or by the ORM adapters.
+type SchemaIndex struct {
+	Tables []TableInfo `json:"tables,omitempty"`
+}
+
 // TraceEvent is one recorded step of a run, for explain()/--trace (M5.1). Kind is
 // a short tag; Detail is the human-readable line (capability arguments redacted);
 // OK marks whether the step succeeded.

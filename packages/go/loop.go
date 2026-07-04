@@ -56,6 +56,8 @@ type RunOptions struct {
 	ConfirmBulk *bool // nil ⇒ true
 	Principal   string
 	Audit       AuditSink
+	Schema      *SchemaIndex
+	Defer       *bool
 	Budget      Budget
 }
 
@@ -69,6 +71,7 @@ type runEnv struct {
 	ctx         Context
 	canWrite    bool
 	autonomy    AutonomyLevel
+	disclosure  *Disclosure
 }
 
 // tally is the mutable per-run state the loop accumulates.
@@ -94,6 +97,10 @@ func RunWith(model Model, reg *CapabilityRegistry, goal string, canWrite bool, o
 	} else if autonomy == "" {
 		autonomy = AutonomyApprovedWrites
 	}
+	disclosure, err := newDisclosure(reg, opts.Schema, opts.Defer)
+	if err != nil {
+		return RunReport{}, err
+	}
 	env := &runEnv{
 		reg:         reg,
 		policy:      orDefault(opts.Policy),
@@ -103,6 +110,7 @@ func RunWith(model Model, reg *CapabilityRegistry, goal string, canWrite bool, o
 		ctx:         Context{Principal: opts.Principal, TraceID: newTraceID()},
 		canWrite:    canWrite,
 		autonomy:    autonomy,
+		disclosure:  disclosure,
 	}
 	budget := opts.Budget
 	if budget.MaxTurns == 0 {
@@ -123,7 +131,7 @@ func RunWith(model Model, reg *CapabilityRegistry, goal string, canWrite bool, o
 				synthetic("Stopped: token budget exhausted.\n  → raise MaxTokens or simplify the goal."),
 				FinishInterrupted, usage, turn, tl, "budget_exhausted"), nil
 		}
-		resp, err := model.Complete(messages, reg.ToolSpecs(), params)
+		resp, err := model.Complete(messages, env.disclosure.tools(), params)
 		if err != nil {
 			return RunReport{}, err
 		}
@@ -155,13 +163,24 @@ func RunWith(model Model, reg *CapabilityRegistry, goal string, canWrite bool, o
 }
 
 func (env *runEnv) act(toolCalls []ToolCall, tl *tally, messages *[]Message, usage Usage, turn int) *RunReport {
+	// Discovery calls (search_capabilities / search_schema) are harness-internal
+	// reads: answered here, free at every autonomy level, allowed under Ask (§2.12).
+	var pending []ToolCall
+	for _, call := range toolCalls {
+		if result, handled := env.disclosure.answer(call); handled {
+			*messages = append(*messages, toolMessage(call.ID, result))
+			continue
+		}
+		pending = append(pending, call)
+	}
+
 	type resolved struct {
 		call ToolCall
 		cap  BoundCapability
 		ok   bool
 	}
-	items := make([]resolved, len(toolCalls))
-	for i, call := range toolCalls {
+	items := make([]resolved, len(pending))
+	for i, call := range pending {
 		cap, ok := env.reg.Get(call.Name)
 		items[i] = resolved{call, cap, ok}
 	}
@@ -370,6 +389,8 @@ type Agent struct {
 	audit       AuditSink
 	principal   string
 	confirmBulk bool
+	schema      *SchemaIndex
+	defer_      *bool
 	dupErr      error // carries a duplicate-registration error out of WithCapabilities
 }
 
@@ -411,6 +432,12 @@ func WithPrincipal(p string) AgentOption { return func(a *Agent) { a.principal =
 // WithConfirmBulk toggles the >1-row bulk-confirm default (on by default).
 func WithConfirmBulk(on bool) AgentOption { return func(a *Agent) { a.confirmBulk = on } }
 
+// WithSchema attaches a data-model index for progressive disclosure (search_schema).
+func WithSchema(s SchemaIndex) AgentOption { return func(a *Agent) { a.schema = &s } }
+
+// WithDefer forces capability disclosure on/off (default: auto, above deferAfter).
+func WithDefer(on bool) AgentOption { return func(a *Agent) { a.defer_ = &on } }
+
 // NewAgent builds an agent. A duplicate capability name is a control-plane error.
 func NewAgent(model Model, opts ...AgentOption) (*Agent, error) {
 	a := &Agent{
@@ -448,6 +475,8 @@ func (a *Agent) run(goal string, canWrite bool) (RunResult, error) {
 		ConfirmBulk: &a.confirmBulk,
 		Principal:   a.principal,
 		Audit:       a.audit,
+		Schema:      a.schema,
+		Defer:       a.defer_,
 		Budget:      a.budget,
 	})
 	if err != nil {
