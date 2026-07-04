@@ -193,9 +193,16 @@ hand-written capabilities:
   that cannot be made linter-clean is dropped, not shipped.
 - A `SchemaIndex` is produced alongside, so the data model is available to
   progressive disclosure (§4.1), not dumped into context.
-- The agent runs *your* mapped classes through *your* session, inheriting your
-  validation and constraints — no raw SQL (§2.3). Python ships SQLAlchemy
-  (M4.1); the Go/TS ports expose the same shape over their ORMs.
+- A natural key must be **unique** — it identifies exactly one row, so
+  `get_`/`update_`/`delete_` can never touch the wrong one. A hint word (email /
+  slug / name) only ranks *among* the unique columns; a non-unique hint-named
+  column is not a key.
+- The agent runs *your* mapped classes through *your* session/ORM, inheriting
+  your validation and constraints — no raw SQL (§2.3). Python ships **SQLAlchemy
+  (M4.1)** and **Django (M4.2)** behind the same `build_orm` shape, so
+  `Agent.from_orm(...)` is identical either way (Django needs no `db` argument —
+  its connection is global). The Go/TS ports expose the same shape over their
+  ORMs.
 
 ## 6. Errors (cross-cutting)
 
