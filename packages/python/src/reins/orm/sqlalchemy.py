@@ -32,7 +32,36 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 # Re-exported for backward compatibility (M4.1 imported ORMError from here).
-__all__ = ["ORMError", "build_sqlalchemy"]
+__all__ = ["ORMError", "build_sqlalchemy", "reflect_database"]
+
+
+def reflect_database(url: str) -> tuple[Any, list[type]]:
+    """Reflect an existing database into mapped classes — the zero-code path.
+
+    Returns ``(engine, models)`` for :func:`build_sqlalchemy`. Tables without a
+    primary key cannot be mapped and are skipped (SQLAlchemy automap's rule).
+    """
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.ext.automap import automap_base
+    except ModuleNotFoundError as exc:
+        raise ORMError(
+            "the 'sqlalchemy' package is required to reflect a database",
+            hint="install it with: pip install 'reins[sqlalchemy]'",
+        ) from exc
+
+    engine = create_engine(url)
+    base = automap_base()
+    base.prepare(autoload_with=engine)
+    models = list(base.classes)
+    if not models:
+        raise ORMError(
+            f"no reflectable tables found at {url!r}",
+            hint="check the URL, or ensure your tables have primary keys "
+            "(automap can only map tables with a primary key)",
+        )
+    return engine, models
+
 
 _PY_TO_JSON = {bool: "boolean", int: "integer", float: "number", str: "string"}
 
@@ -121,6 +150,10 @@ def _introspect(model: type) -> ModelInfo:
     from sqlalchemy import inspect as sa_inspect
 
     mapper: Any = sa_inspect(model)
+    # Uniqueness may live on the column (hand-written models) OR in a table-level
+    # single-column UniqueConstraint / unique Index (which is how reflection —
+    # the CLI's zero-code path — records it). Consider both.
+    unique_cols = _unique_single_columns(getattr(model, "__table__", None))
     columns: list[ColumnInfo] = []
     primary_key: ColumnInfo | None = None
     for column in mapper.columns:
@@ -137,13 +170,16 @@ def _introspect(model: type) -> ModelInfo:
             autoincrement=autoincrement,
             # A DB- or Python-side default means the caller may omit it on insert.
             has_default=column.default is not None or column.server_default is not None,
-            unique=bool(column.unique),
+            unique=bool(column.unique) or column.key in unique_cols,
         )
         columns.append(col)
         if column.primary_key and primary_key is None:
             primary_key = col
     singular = snake(model.__name__)
-    plural = getattr(model, "__tablename__", None) or pluralize(singular)
+    table = getattr(model, "__table__", None)
+    plural = (
+        getattr(model, "__tablename__", None) or getattr(table, "name", None) or pluralize(singular)
+    )
     return ModelInfo(
         model=model,
         singular=singular,
@@ -152,6 +188,24 @@ def _introspect(model: type) -> ModelInfo:
         primary_key=primary_key,
         description=first_docline(model, f"The {plural} table."),
     )
+
+
+def _unique_single_columns(table: Any) -> set[str]:
+    """Column names carrying a single-column UNIQUE constraint or unique index."""
+    if table is None:
+        return set()
+    from sqlalchemy import UniqueConstraint
+
+    names: set[str] = set()
+    for constraint in getattr(table, "constraints", ()):
+        cols = list(getattr(constraint, "columns", []))
+        if isinstance(constraint, UniqueConstraint) and len(cols) == 1:
+            names.add(cols[0].key)
+    for index in getattr(table, "indexes", ()):
+        cols = list(index.columns)
+        if getattr(index, "unique", False) and len(cols) == 1:
+            names.add(cols[0].key)
+    return names
 
 
 def _json_type(column: Any) -> str:

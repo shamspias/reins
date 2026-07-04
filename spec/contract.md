@@ -204,6 +204,25 @@ hand-written capabilities:
   its connection is global). The Go/TS ports expose the same shape over their
   ORMs.
 
+## 5.2 One-liners, modules, and the CLI *(from M4.3)*
+
+- **`Agent.from_module(module)`** exposes every public function *defined in* a
+  module (skipping imports, privates, non-callables, classes) as a capability,
+  classified read/write by its name's verb — the same rules as `@capability`.
+  Pre-decorated functions are taken as-is; `include` / `exclude` filter.
+- **`reins.ask(goal, using=...)` / `reins.run(goal, using=...)`** are one-line
+  shortcuts: `using` may be an `Agent`, a module, or a list of capabilities.
+- **The `reins` CLI** operates a database with no code:
+  - `reins inspect <db-url>` — reflect the database and print the generated
+    capabilities with their read/write classification. Needs no model/API key.
+    `--write` also lists the gated write operations.
+  - `reins ask <db-url> "question"` and `reins chat <db-url>` — **read-only**
+    (§2.1); they answer questions but never write. The model comes from the
+    environment or `--model provider:model`.
+  - Reflection maps existing tables (automap; tables need a primary key), and
+    reads table-level single-column UNIQUE constraints/indexes so natural-key
+    lookups resolve on reflected schemas. Every failure ends with a `→` hint.
+
 ## 6. Errors (cross-cutting)
 
 Every user-facing error ends with a `→ next step` *(invariant §2.19)*. Capability

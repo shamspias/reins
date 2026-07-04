@@ -17,6 +17,24 @@ expose your app, and the agent operates it.
 > OpenAPI specs strip away — which is exactly where text-to-SQL and auto-generated tool
 > layers lose their reliability.
 
+## No code at all: point it at a database
+
+Already have a database? Operate it from your terminal — no models, no Python:
+
+```bash
+pip install "reins[sqlalchemy]"
+export ANTHROPIC_API_KEY=sk-...        # or any provider key
+
+reins inspect sqlite:///shop.db        # see what Reins can do (no key needed)
+reins ask     sqlite:///shop.db "how many orders shipped last week?"
+reins chat    sqlite:///shop.db        # an interactive, read-only Q&A session
+```
+
+`reins chat` and `ask` are **read-only** — they answer questions but never change
+your data. `reins inspect` reflects your tables and prints the exact capability
+surface (with read/write classification) so you can see what an agent could do
+before you ever run one.
+
 ## Example
 
 ```python
@@ -310,7 +328,8 @@ before `1.0`.
 - [x] Code-mode execution — sandboxed programs, data never transits the model
 - [x] Budgets (turns/tokens/cost/time) and history compaction that keeps the goal
 - [x] SQLAlchemy **and Django** auto-exposure — `Agent.from_orm(...)`, zero capabilities
-- [ ] A zero-code `reins chat <db-url>` CLI and instant web/API integrations
+- [x] Zero-code CLI — `reins chat` / `ask` / `inspect <db-url>` and `from_module`
+- [ ] Instant web/API integrations (`reins.endpoint`, `<reins-chat>`) and identity wiring
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development
