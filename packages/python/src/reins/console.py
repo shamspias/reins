@@ -116,6 +116,23 @@ def cmd_chat(
     """Interactive read-only Q&A loop over the reflected database."""
     agent = _agent_from_url(db_url, model=model)
     out(f"Connected to {db_url}. Ask a question — 'exit' or Ctrl-D to quit.")
+    return repl(agent, input_fn=input_fn, out=out)
+
+
+def repl(
+    agent: Agent,
+    *,
+    write: bool = False,
+    principal: str | None = None,
+    input_fn: Callable[[str], str] = input,
+    out: Printer = print,
+) -> int:
+    """An interactive prompt over an existing agent — the ``reins.cli(agent)`` loop.
+
+    Read-only by default (``ask()``); ``write=True`` uses ``run()`` so gated
+    writes prompt for approval inline. ``input_fn`` / ``out`` are injectable.
+    """
+    verb = agent.run if write else agent.ask
     while True:
         try:
             line = input_fn("reins> ")
@@ -128,7 +145,7 @@ def cmd_chat(
         if question in ("exit", "quit"):
             return 0
         try:
-            out(agent.ask(question).output.text or "(no answer)")
+            out(verb(question, principal=principal).output.text or "(no answer)")
         except ReinsError as exc:
             out(f"error: {exc}")
 
