@@ -243,11 +243,24 @@ hand-written capabilities:
 - **`reins.cli(agent)`** runs an existing agent as an interactive terminal
   session (read-only by default; `write=True` uses `run()`).
 
+## 5.4 Transparency *(from M5.1)*
+
+Reins is not a black box (invariant §2.20). Each run records a structured trace
+of `TraceEvent`s — discovery searches, the **code the agent wrote** in code-mode
+and its output, each capability call and whether it succeeded, every approval
+decision, and how the run ended. `agent.explain()` (and the run report's
+`.explain()`) render it readably; `reins ask|chat --trace` print it. Capability
+arguments in the trace are PII-redacted, exactly like the audit log — the trace
+never leaks a secret.
+
 ## 6. Errors (cross-cutting)
 
 Every user-facing error ends with a `→ next step` *(invariant §2.19)*. Capability
 failures are data (`ok=False`, `error`, `retryable`); control-plane failures
-raise typed exceptions, never a bare `Exception`, across the loop boundary.
+raise typed exceptions, never a bare `Exception`, across the loop boundary. The
+standard set includes: no model configured, a write attempted under `ask()`
+(→ use `run()`), the approval preview, and an unknown capability that suggests
+its closest matches.
 
 ---
 

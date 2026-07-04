@@ -24,7 +24,7 @@ from reins.loop import Agent
 from reins.policy import AutonomyLevel
 from reins.pricing import DEFAULT_PRICING, Pricing
 from reins.sandbox import DockerSandbox, Sandbox, SubprocessSandbox
-from reins.types import Context, RunResult, ToolSpec
+from reins.types import Context, RunResult, ToolSpec, TraceEvent
 
 __all__ = [
     "DEFAULT_PRICING",
@@ -45,6 +45,7 @@ __all__ = [
     "TableInfo",
     "TerminalApprovalHandler",
     "ToolSpec",
+    "TraceEvent",
     "__version__",
     "ask",
     "capability",

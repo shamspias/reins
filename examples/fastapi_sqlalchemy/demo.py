@@ -87,6 +87,9 @@ def main() -> int:
             f"by {record.principal} @ {record.timestamp:%H:%M:%S}"
         )
 
+    _rule("6. agent.explain() — a readable trace of what just happened")
+    print(writer.explain())
+
     _rule("Run it for real")
     print("Serve the same agent over HTTP with the <reins-chat> widget:")
     print("  pip install 'reins[sqlalchemy]' fastapi uvicorn")

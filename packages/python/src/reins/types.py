@@ -143,6 +143,21 @@ class Capability:
 
 
 @dataclass(frozen=True, slots=True)
+class TraceEvent:
+    """One recorded step of a run, for ``agent.explain()`` / ``--trace`` (M5.1).
+
+    ``kind`` is a short tag (``search`` / ``program`` / ``output`` / ``call`` /
+    ``approval`` / ``refused`` / ``denied`` / ``stopped``); ``detail`` is the
+    human-readable line. Capability arguments in ``detail`` are PII-redacted, like
+    the audit log. ``ok`` marks whether the step succeeded.
+    """
+
+    kind: str
+    detail: str
+    ok: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class CapabilityResult:
     """Errors-as-data: the outcome of executing a capability (ENGINEERING.md §2).
 
