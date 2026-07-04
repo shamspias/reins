@@ -35,6 +35,9 @@ openai = ["openai>=1.40"]         # optional: OpenAI/Groq/vLLM/Ollama/Z.ai/Gemin
 sqlalchemy = ["sqlalchemy>=2.0"]  # optional: Agent.from_orm SQLAlchemy auto-expose (M4.1)
 django = ["django>=4.2"]          # optional: Agent.from_orm Django auto-expose (M4.2)
 
+[project.scripts]
+reins = "reins.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/reins"]
 

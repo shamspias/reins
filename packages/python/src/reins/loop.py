@@ -41,7 +41,7 @@ from reins.capability import BoundCapability
 from reins.clock import Clock, MonotonicClock
 from reins.conversation import compact
 from reins.disclosure import Disclosure, SchemaIndex
-from reins.errors import CapabilityError, SandboxError
+from reins.errors import CapabilityError, ReinsError, SandboxError
 from reins.model import Model, ModelParams, default_model, resolve_model
 from reins.policy import AutonomyLevel, Decision, DefaultPolicy, Policy, ProposedAction
 from reins.pricing import Pricing
@@ -789,6 +789,58 @@ class Agent:
             db, models=models, can_write=can_write, read_limit=read_limit
         )
         return cls(capabilities=capabilities, schema=schema, **kwargs)
+
+    @classmethod
+    def from_module(
+        cls,
+        module: Any,
+        *,
+        include: Sequence[str] | None = None,
+        exclude: Sequence[str] = (),
+        **kwargs: Any,
+    ) -> Agent:
+        """Build an agent from a module of plain functions — no decorators needed.
+
+        Every public function *defined in* ``module`` (name not starting with
+        ``_``, not imported from elsewhere, not a class) becomes a capability;
+        functions already decorated with ``@capability`` are taken as-is. Each is
+        classified read/write by its name's leading verb (§2.4), so ``get_*`` is a
+        safe read and ``delete_*`` a gated destructive write, exactly as if you had
+        decorated it. ``module`` may be the module object or its import path;
+        ``include`` whitelists names, ``exclude`` drops them. Extra keyword
+        arguments are forwarded to the constructor.
+        """
+        import importlib
+        import inspect as _inspect
+
+        from reins.capability import capability
+
+        if isinstance(module, str):
+            module = importlib.import_module(module)
+        module_name = getattr(module, "__name__", None)
+        capabilities: list[BoundCapability] = []
+        for name in dir(module):
+            if name.startswith("_") or name in exclude:
+                continue
+            if include is not None and name not in include:
+                continue
+            obj = getattr(module, name)
+            if isinstance(obj, BoundCapability):
+                capabilities.append(obj)
+                continue
+            if _inspect.isclass(obj) or not callable(obj):
+                continue
+            # Only functions actually defined in this module — never re-expose
+            # imports (e.g. a helper pulled in with `from x import y`).
+            if getattr(obj, "__module__", None) != module_name:
+                continue
+            capabilities.append(capability(obj))
+        if not capabilities:
+            raise ReinsError(
+                f"no public functions to expose in {module_name!r}",
+                hint="define public functions in the module, or pass include=[...]",
+            )
+        return cls(capabilities=capabilities, **kwargs)
 
     @property
     def audit(self) -> AuditSink:
