@@ -27,9 +27,11 @@ dev = [
     "pytest>=8.0",
     "pre-commit>=3.7",
     "pyyaml>=6.0",       # parse spec/conformance/cases/*.yaml (test-only)
+    "sqlalchemy>=2.0",   # exercise the ORM adapter against in-memory SQLite (test-only)
 ]
 anthropic = ["anthropic>=0.40"]   # optional: the AnthropicModel adapter (M1.2)
 openai = ["openai>=1.40"]         # optional: OpenAI/Groq/vLLM/Ollama/Z.ai/Gemini via compat (M2.5)
+sqlalchemy = ["sqlalchemy>=2.0"]  # optional: Agent.from_orm SQLAlchemy auto-expose (M4.1)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reins"]
@@ -51,7 +53,7 @@ warn_unused_configs = true
 # The provider SDKs are optional extras, not installed in the dev/CI env; the
 # adapters import them lazily. Treat them as untyped at the boundary.
 [[tool.mypy.overrides]]
-module = ["anthropic", "anthropic.*", "openai", "openai.*"]
+module = ["anthropic", "anthropic.*", "openai", "openai.*", "sqlalchemy", "sqlalchemy.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

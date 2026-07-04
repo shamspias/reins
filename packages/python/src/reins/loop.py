@@ -760,6 +760,34 @@ class Agent:
         for cap in capabilities:
             self._registry.register(cap)
 
+    @classmethod
+    def from_orm(
+        cls,
+        db: Any,
+        *,
+        models: Any | None = None,
+        can_write: bool = False,
+        read_limit: int = 50,
+        **kwargs: Any,
+    ) -> Agent:
+        """Build an agent straight from your ORM models — zero hand-written capabilities.
+
+        Introspects ``models`` (mapped classes or a declarative base) reached
+        through ``db`` (a SQLAlchemy ``Session``, ``sessionmaker``, session
+        factory, or ``Engine``) and exposes intent-level, linted capabilities plus
+        a schema index for progressive disclosure. Reads are always available;
+        write capabilities appear only with ``can_write=True`` and are gated by
+        the autonomy ladder exactly like any other write. Extra keyword arguments
+        (``model``, ``autonomy``, ``approve``, ``principal``, ``audit`` …) are
+        forwarded to the constructor.
+        """
+        from reins.orm import build_orm
+
+        capabilities, schema = build_orm(
+            db, models=models, can_write=can_write, read_limit=read_limit
+        )
+        return cls(capabilities=capabilities, schema=schema, **kwargs)
+
     @property
     def audit(self) -> AuditSink:
         """This agent's audit sink (default: in-memory, see ``.records``)."""
