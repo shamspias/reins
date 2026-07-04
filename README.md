@@ -384,7 +384,7 @@ the trace, just like the audit log.
 | Adding it to an app | Wrap logic in framework primitives       | Decorate functions you already have              |
 | CRUD on a database  | Often raw SQL tools, or custom nodes     | Calls your typed methods, inheriting your auth   |
 | Debuggability       | Debug the framework's internals          | Debug your own small loop and your own functions |
-| Languages           | Python-first                             | Python today; Go and TypeScript planned          |
+| Languages           | Python-first                             | Python + Go today (Go in alpha); TypeScript next  |
 
 ## Status
 
@@ -412,7 +412,8 @@ before `1.0`.
 - [x] Zero-code CLI — `reins chat` / `ask` / `inspect <db-url>` and `from_module`
 - [x] Instant web integration — `reins.endpoint`, `<reins-chat>`, session-identity → RLS
 - [x] A flagship end-to-end example (FastAPI + SQLAlchemy, gated writes) — `make demo`
-- [ ] Go and TypeScript packages, verified against one shared conformance suite
+- [x] **Go package** (`packages/go`) — same verbs, passes the shared conformance suite; capabilities + classification + linter, the `Ask`/`Run` loop, full safety (policy/approval/audit/RLS), progressive disclosure, an OpenAI-compatible adapter for all providers above, GORM `FromORM`, and a `reins inspect|ask|chat <db-url>` CLI. Remaining: a native Go code-mode sandbox.
+- [ ] TypeScript package, verified against the same shared conformance suite
 
 ## Development
 
@@ -423,6 +424,42 @@ make check     # the gate: ruff + mypy --strict + tests + conformance
 
 The Python package lives in `packages/python`. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 the workflow and conventions.
+
+## Go
+
+The Go package (`packages/go`, module `github.com/shamspias/reins/packages/go`) mirrors
+the Python verbs and passes the same conformance suite. The zero-code CLI works the same
+way — point it at a SQLite database and it reflects the schema into intent-level
+capabilities (no models to write):
+
+```bash
+go install github.com/shamspias/reins/packages/go/cmd/reins@latest
+
+reins inspect ./app.db                 # list the capabilities Reins would expose (no key needed)
+reins ask     ./app.db "how many active customers?"   # read-only answer
+reins chat    ./app.db --model groq:llama-3.3-70b-versatile
+```
+
+`ask` and `chat` are **read-only** (writes aren't even generated); `inspect --write` reveals
+the gated create/update/delete. The model is resolved from `--model` (`provider:model`) or the
+environment — the same seven providers as Python. In code:
+
+```go
+model, _ := reins.ResolveModel("openai:gpt-4o")            // or reins.DefaultModel() from env
+
+// The input schema is reflected from RefundArgs; access is classified from the name.
+refund := reins.Define[RefundArgs]("refund_order", "Refund an order by its id.",
+    func(ctx reins.Context, args map[string]any) (any, error) {
+        return refundOrder(args["order_id"])
+    })
+
+agent, _ := reins.NewAgent(model, reins.WithCapabilities(refund))
+res, _ := agent.Ask("how much did order 8842 cost?")        // Ask never writes; Run gates writes
+fmt.Println(res.Output.Text)
+```
+
+Run `make go-check` for the Go gate (gofmt + vet + tests). A native Go code-mode sandbox is
+the one remaining piece.
 
 ## Documentation
 
