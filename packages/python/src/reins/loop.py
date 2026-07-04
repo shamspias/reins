@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from reins.approval import (
@@ -38,10 +38,13 @@ from reins.approval import (
 from reins.audit import AuditRecord, AuditSink, MemoryAuditSink, now, redact_arguments
 from reins.budget import Budget
 from reins.capability import BoundCapability
+from reins.clock import Clock, MonotonicClock
+from reins.conversation import compact
 from reins.disclosure import Disclosure, SchemaIndex
 from reins.errors import CapabilityError, SandboxError
 from reins.model import Model, ModelParams, default_model, resolve_model
 from reins.policy import AutonomyLevel, Decision, DefaultPolicy, Policy, ProposedAction
+from reins.pricing import Pricing
 from reins.registry import CapabilityRegistry
 from reins.rls import scope_violation
 from reins.sandbox import Sandbox, SubprocessSandbox
@@ -108,6 +111,7 @@ class RunReport:
     reason: str | None = None
     audited: bool = False
     audit: tuple[AuditRecord, ...] = ()
+    compactions: int = 0
     trace_id: str = ""
 
 
@@ -126,6 +130,7 @@ class _Tally:
     executed: list[str] = field(default_factory=list)
     wrote: bool = False
     audit: list[AuditRecord] = field(default_factory=list)
+    compactions: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,12 +166,15 @@ def run_loop(
     defer: bool | None = None,
     mode: str = "code",
     sandbox: Sandbox | None = None,
+    pricing: Pricing | None = None,
+    clock: Clock | None = None,
     budget: Budget | None = None,
     params: ModelParams | None = None,
 ) -> RunReport:
     """Drive the ETCSLV loop to a stop condition and return a :class:`RunReport`."""
     budget = budget or Budget()
     params = params or ModelParams()
+    clock = clock or MonotonicClock()
     if mode not in ("code", "simple"):
         raise SandboxError(
             f"unknown mode {mode!r}",
@@ -203,14 +211,15 @@ def run_loop(
     usage = Usage()
     last: ModelResponse | None = None
     turn = 0
+    started_at = clock.now()
 
     while True:
-        if budget.over_tokens(usage):  # E/L: pre-think budget guard
+        # E/L: pre-think budget guards — a runaway is stopped deterministically (§2.13).
+        exhausted = _budget_stop(budget, usage, clock.now() - started_at)
+        if exhausted is not None:
             return _report(
                 "stopped",
-                output=_synthetic(
-                    "Stopped: token budget exhausted.\n  → raise max_tokens or simplify the goal."
-                ),
+                output=_synthetic(exhausted),
                 finish=FinishReason.INTERRUPTED,
                 usage=usage,
                 turn=turn,
@@ -219,11 +228,21 @@ def run_loop(
                 reason="budget_exhausted",
             )
 
+        # Context discipline (M3.3): keep the window bounded, never lose the goal.
+        messages, compacted = compact(messages, compact_at=budget.compact_at)
+        if compacted:
+            tally.compactions += 1
+
         tools = env.disclosure.tools()
         if env.mode == "code":
             tools = [*tools, _RUN_PROGRAM_SPEC]
         resp = model.complete(messages, tools, params)  # T: think
-        usage = _add(usage, resp.usage)
+        resp_usage = resp.usage
+        if pricing is not None and params.model:  # fold token cost into the meter
+            resp_usage = replace(
+                resp_usage, cost=resp_usage.cost + pricing.cost_of(params.model, resp_usage)
+            )
+        usage = _add(usage, resp_usage)
         messages.append(resp.message)
         last = resp
 
@@ -606,6 +625,17 @@ def _audit_action(
     return True
 
 
+def _budget_stop(budget: Budget, usage: Usage, elapsed: float) -> str | None:
+    """The user-facing message if a hard budget is exhausted, else ``None``."""
+    if budget.over_tokens(usage):
+        return "Stopped: token budget exhausted.\n  → raise max_tokens or simplify the goal."
+    if budget.over_cost(usage):
+        return "Stopped: cost budget exhausted.\n  → raise max_cost or simplify the goal."
+    if budget.over_time(elapsed):
+        return "Stopped: time budget exhausted.\n  → raise max_seconds or simplify the goal."
+    return None
+
+
 def _report(
     outcome: str,
     *,
@@ -627,6 +657,7 @@ def _report(
         reason=reason,
         audited=bool(tally.audit),
         audit=tuple(tally.audit),
+        compactions=tally.compactions,
         trace_id=trace_id,
     )
 
@@ -679,6 +710,11 @@ class Agent:
     sandbox is a whitelisted-import subprocess (a development tier, honestly
     not a hard boundary); pass ``sandbox=DockerSandbox()`` in production, or
     ``mode="simple"`` to disable programs entirely.
+
+    A ``budget`` bounds the run (turns / tokens / cost / time; it also compacts
+    history once the conversation gets large, always keeping the goal); pass a
+    ``pricing`` table to meter USD cost from token usage so ``budget.max_cost``
+    can stop before a run gets expensive.
     """
 
     def __init__(
@@ -696,10 +732,12 @@ class Agent:
         defer: bool | None = None,
         mode: str = "code",
         sandbox: Sandbox | None = None,
+        pricing: Pricing | None = None,
     ) -> None:
         # Resolve strings eagerly so a typo'd provider fails at construction with
         # a hinted error, not mid-run.
         self._model = resolve_model(model) if isinstance(model, str) else model
+        self._pricing = pricing
         self._budget = budget or Budget()
         self._autonomy = autonomy
         self._policy = policy or DefaultPolicy()
@@ -763,6 +801,7 @@ class Agent:
             defer=self._defer,
             mode=self._mode,
             sandbox=self._sandbox,
+            pricing=self._pricing,
             budget=self._budget,
         )
 

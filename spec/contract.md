@@ -76,8 +76,18 @@ testable with a FakeModel.
   never run. *(invariant §2.5)*
 - Capability failures return **as data** so the model can adapt; only
   control-plane failures raise (typed).
-- Budgets (token / turn / time) are stop conditions: a runaway loop is a bug,
-  not an edge case. *(invariant §2.13)*
+- Budgets are stop conditions: a runaway loop is a bug, not an edge case
+  *(invariant §2.13)*. A `Budget` caps **turns, tokens, cost (USD), and
+  wall-clock time** *(cost & time from M3.3)*; each hard cap ends the run
+  `stopped` / `budget_exhausted`. Time uses an injected clock (deterministic
+  under test); cost is metered from token usage by a pricing table (unknown
+  models cost 0 — the meter never guesses a price).
+- **Context discipline** *(from M3.3)* — the system prompt is tiny, immutable,
+  and policy-free. When the conversation's estimated size crosses the budget's
+  soft `compact_at` limit, history is **compacted**: the oldest middle is
+  dropped while the system prompt, the first user message (the goal), and the
+  most recent turns are always kept, and no tool result is left without its
+  originating tool call. Compaction is deterministic (no summarizer model call).
 - **Code-mode is the default action interface** *(from M3.2, invariant §2.11)* —
   the model may call `run_program` with a short Python program; capabilities are
   plain functions inside it (also importable from a `capabilities` module).
