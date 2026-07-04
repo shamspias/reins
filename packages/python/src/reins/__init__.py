@@ -48,10 +48,51 @@ __all__ = [
     "__version__",
     "ask",
     "capability",
+    "chat_widget",
+    "cli",
+    "endpoint",
     "run",
 ]
 
 __version__ = "0.0.0"
+
+
+def cli(
+    agent: Agent,
+    *,
+    write: bool = False,
+    principal: str | None = None,
+    input_fn: Any = input,
+    out: Any = print,
+) -> int:
+    """Run an existing agent as an interactive terminal session.
+
+    Read-only by default; ``write=True`` uses ``run()`` so gated writes prompt for
+    approval inline. Returns the process exit code.
+    """
+    from reins.console import repl
+
+    return repl(agent, write=write, principal=principal, input_fn=input_fn, out=out)
+
+
+def endpoint(agent: Agent, **kwargs: Any) -> Any:
+    """A WSGI app exposing ``POST /ask`` (and ``/run`` unless ``read_only``) for ``agent``.
+
+    Mounts in Flask directly and in FastAPI via ``WSGIMiddleware``; pass
+    ``identity=`` to derive the caller's principal from the request for RLS. See
+    :func:`reins.web.endpoint`, and :func:`reins.web.flask_blueprint` /
+    :func:`reins.web.fastapi_router` for framework-native routers.
+    """
+    from reins.web import endpoint as _endpoint
+
+    return _endpoint(agent, **kwargs)
+
+
+def chat_widget(endpoint: str = "/ask", **kwargs: Any) -> str:
+    """HTML for a self-contained ``<reins-chat>`` element that POSTs to ``endpoint``."""
+    from reins.web import chat_widget as _chat_widget
+
+    return _chat_widget(endpoint, **kwargs)
 
 
 def _to_agent(using: Any, **kwargs: Any) -> Agent:

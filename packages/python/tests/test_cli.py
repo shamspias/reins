@@ -10,7 +10,7 @@ pytest.importorskip("sqlalchemy")
 
 from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine, insert
 
-from reins import cli
+from reins import console as cli
 from reins.errors import ReinsError
 from reins.model import FakeModel
 

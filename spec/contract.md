@@ -223,6 +223,26 @@ hand-written capabilities:
     reads table-level single-column UNIQUE constraints/indexes so natural-key
     lookups resolve on reflected schemas. Every failure ends with a `→` hint.
 
+## 5.3 Instant web integration *(from M4.4)*
+
+- **`reins.endpoint(agent, ...)`** returns a WSGI app: `POST /ask` runs `ask()`
+  and returns `{"answer", "trace_id"}` JSON; `POST /run` runs `run()` and appears
+  **only when `read_only=False`**. `read_only=True` (default) never exposes a
+  write path and only ever calls `ask()`, so the endpoint is read-safe by
+  construction (§2.1). It mounts in Flask directly and in FastAPI via
+  `WSGIMiddleware`; `reins.web.flask_blueprint` / `fastapi_router` give native
+  routers over the same core.
+- **Identity from the existing session** — pass `identity=lambda request: ...`
+  to derive the caller's principal from the request's cookie / JWT / header; it
+  flows into the agent's `Context`, so row-scoped capabilities (§2.4/§5) are
+  enforced per user with no second auth system.
+- **`<reins-chat>`** (`reins.chat_widget(endpoint)`) is a self-contained custom
+  element that POSTs to the endpoint with `credentials: "include"`, so the
+  browser's existing session authenticates the call. Malformed/oversized bodies
+  and control-plane failures return hinted JSON errors, never a stack trace.
+- **`reins.cli(agent)`** runs an existing agent as an interactive terminal
+  session (read-only by default; `write=True` uses `run()`).
+
 ## 6. Errors (cross-cutting)
 
 Every user-facing error ends with a `→ next step` *(invariant §2.19)*. Capability

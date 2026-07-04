@@ -271,6 +271,35 @@ agent = Agent(capabilities=[...], sandbox=DockerSandbox())  # no network, read-o
 agent = Agent(capabilities=[...], mode="simple")            # or: no programs at all
 ```
 
+## Drop it into your web app
+
+Add a chat endpoint to the app your users already log in to — and let their
+existing session decide what each of them can see:
+
+```python
+from reins import Agent, endpoint
+
+agent = Agent.from_orm(db, models=[Order, Invoice])
+
+# a WSGI app: POST /ask runs read-only; identity comes from the live session
+app.wsgi_app = endpoint(                       # Flask; FastAPI via WSGIMiddleware
+    agent,
+    identity=lambda req: req.cookies.get("user_id"),   # your auth, reused
+)
+```
+
+`endpoint()` is read-only by default (no write route exists at all). The
+`identity` you pass flows straight into row-level security, so one user's chat can
+never surface another's rows — no second auth system. There are native
+`reins.web.flask_blueprint(agent)` and `reins.web.fastapi_router(agent)` too.
+
+Drop the chat box on any page — one self-contained element, no build step:
+
+```python
+from reins import chat_widget
+page_html += chat_widget("/ask")     # renders <reins-chat>, POSTs with your cookies
+```
+
 ## Scale without paying for it
 
 Registered 10 capabilities or 10,000? The model's base context is **byte-identical**:
@@ -329,7 +358,8 @@ before `1.0`.
 - [x] Budgets (turns/tokens/cost/time) and history compaction that keeps the goal
 - [x] SQLAlchemy **and Django** auto-exposure — `Agent.from_orm(...)`, zero capabilities
 - [x] Zero-code CLI — `reins chat` / `ask` / `inspect <db-url>` and `from_module`
-- [ ] Instant web/API integrations (`reins.endpoint`, `<reins-chat>`) and identity wiring
+- [x] Instant web integration — `reins.endpoint`, `<reins-chat>`, session-identity → RLS
+- [ ] A flagship end-to-end example (FastAPI + SQLAlchemy, gated writes)
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development

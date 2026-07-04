@@ -36,7 +36,7 @@ sqlalchemy = ["sqlalchemy>=2.0"]  # optional: Agent.from_orm SQLAlchemy auto-exp
 django = ["django>=4.2"]          # optional: Agent.from_orm Django auto-expose (M4.2)
 
 [project.scripts]
-reins = "reins.cli:main"
+reins = "reins.console:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reins"]
@@ -72,8 +72,18 @@ module = [
     "sqlalchemy.*",
     "django",
     "django.*",
+    "flask",
+    "flask.*",
+    "fastapi",
+    "fastapi.*",
 ]
 ignore_missing_imports = true
+
+# The Flask/FastAPI route decorators are untyped (both are optional deps stubbed
+# as Any), which trips strict decorator checking on the thin adapter functions.
+[[tool.mypy.overrides]]
+module = ["reins.web"]
+disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
