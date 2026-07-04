@@ -92,6 +92,25 @@ def test_unknown_route_is_404() -> None:
     assert status == 404
 
 
+def test_control_plane_error_is_a_clean_400_not_a_500(monkeypatch: Any) -> None:
+    # No model configured → ask() raises a hinted ModelError; the endpoint returns
+    # a 400 JSON with the hint, never a bare 500 stack.
+    for var in (
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "ZAI_API_KEY",
+        "OLLAMA_BASE_URL",
+        "VLLM_BASE_URL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    app = reins.endpoint(Agent(capabilities=[find_orders]))  # no model → resolves from env
+    status, _h, payload = _call(app, "POST", "/ask", body={"goal": "hi"})
+    assert status == 400
+    assert "→" in _json(payload)["hint"]
+
+
 # --- the read-only guarantee ------------------------------------------------------
 
 

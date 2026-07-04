@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reins"
-version = "0.0.0"
+version = "0.1.0a1"
 description = "A lightweight agent harness you bolt onto an existing app so an LLM can operate it (CRUD + actions) safely and cheaply."
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "shamspias", email = "shamsuddinpias0@gmail.com" }]
 keywords = ["llm", "agent", "harness", "anthropic", "crud", "orm"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -26,6 +26,7 @@ dev = [
     "mypy>=1.11",
     "pytest>=8.0",
     "pre-commit>=3.7",
+    "pytest-cov>=5.0",   # coverage gate (make test / CI)
     "pyyaml>=6.0",       # parse spec/conformance/cases/*.yaml (test-only)
     "sqlalchemy>=2.0",   # exercise the SQLAlchemy ORM adapter against in-memory SQLite (test-only)
     "django>=4.2",       # exercise the Django ORM adapter against in-memory SQLite (test-only)
@@ -88,3 +89,23 @@ disallow_untyped_decorators = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.coverage.run]
+source = ["reins"]
+# Optional integrations CI does not install (provider SDKs, Docker) are validated
+# by their own injected-client / live / importorskip tests, not the core gate.
+omit = [
+    "*/adapters/anthropic.py",
+    "*/adapters/openai_compat.py",
+    "*/sandbox/docker.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    'if __name__ == "__main__":',
+    "\\.\\.\\.",            # Protocol method stubs
+    "# pragma: no cover",
+]

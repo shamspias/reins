@@ -152,7 +152,7 @@ _STATUS_TEXT = {200: "OK", 400: "Bad Request", 404: "Not Found", 405: "Method No
 # --- framework adapters (thin; delegate to run_goal) -----------------------------
 
 
-def flask_blueprint(
+def flask_blueprint(  # pragma: no cover  (optional dep; importorskip-tested, not in CI)
     agent: Agent,
     *,
     name: str = "reins",
@@ -196,7 +196,7 @@ def flask_blueprint(
     return bp
 
 
-def fastapi_router(
+def fastapi_router(  # pragma: no cover  (optional dep; importorskip-tested, not in CI)
     agent: Agent,
     *,
     path: str = "/ask",
