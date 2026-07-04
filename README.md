@@ -48,6 +48,23 @@ your data. `reins inspect` reflects your tables and prints the exact capability
 surface (with read/write classification) so you can see what an agent could do
 before you ever run one.
 
+## The adoption ladder
+
+Start at the top rung and stop wherever you have what you need — each is a strict
+superset of the one above, and nothing lower ever requires the levels below it.
+
+| Level | You have… | You write… |
+| ----- | --------- | ---------- |
+| **0 — Try it** | a database | nothing — `make demo`, or `reins chat <db-url>` |
+| **1 — Your ORM** | SQLAlchemy / Django models | `Agent.from_orm(db, models=[...])` |
+| **2 — Your functions** | functions or a module | `@capability` / `Agent.from_module(mod)` |
+| **3 — Writes, safely** | something to change | `can_write=True`, `approve=`, `principal=` (RLS) |
+| **4 — Production** | users and traffic | a provider, `DockerSandbox()`, `endpoint(...)`, budgets |
+
+Full copy-paste walkthrough: **[QUICKSTART.md](QUICKSTART.md)**. Swapping in your
+own model, policy, approval gate, sandbox, or audit sink:
+**[EXTENDING.md](EXTENDING.md)**.
+
 ## Example
 
 ```python
@@ -337,8 +354,8 @@ agent.ask("how many refunds this week?")
 # of base context — the same whether you registered 20 operations or 20,000.
 ```
 
-(The ORM adapters, next on the roadmap, will build both the capabilities and the
-schema index from your models automatically.)
+`Agent.from_orm(...)` builds both the capabilities and this schema index from your
+models automatically, so scale is free out of the box.
 
 ## Never a black box
 
@@ -404,6 +421,14 @@ make check     # the gate: ruff + mypy --strict + tests + conformance
 
 The Python package lives in `packages/python`. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 the workflow and conventions.
+
+## Documentation
+
+- **[QUICKSTART.md](QUICKSTART.md)** — the adoption ladder, rung by rung, all runnable.
+- **[EXTENDING.md](EXTENDING.md)** — swap in your own model, policy, approval gate,
+  sandbox, or audit sink.
+- **[`examples/fastapi_sqlalchemy/`](examples/fastapi_sqlalchemy/)** — a complete app
+  (`make demo`, and a real FastAPI server).
 
 ## License
 
