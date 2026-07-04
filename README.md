@@ -281,6 +281,7 @@ before `1.0`.
 - [x] Any model: Anthropic, OpenAI, Gemini, Groq, Z.ai/GLM, Ollama, vLLM
 - [x] On-demand capability & schema discovery — constant context at any scale
 - [x] Code-mode execution — sandboxed programs, data never transits the model
+- [x] Budgets (turns/tokens/cost/time) and history compaction that keeps the goal
 - [ ] ORM auto-exposure (SQLAlchemy, Django) and a zero-code `reins chat <db-url>`
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 

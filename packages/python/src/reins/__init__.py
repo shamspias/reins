@@ -11,23 +11,28 @@ M1.1 onward, one milestone per release.
 
 from reins.approval import ApprovalHandler, ApprovalRequest, TerminalApprovalHandler
 from reins.audit import AuditRecord, AuditSink, MemoryAuditSink
+from reins.budget import Budget
 from reins.capability import capability
 from reins.disclosure import SchemaIndex, TableInfo
 from reins.loop import Agent
 from reins.policy import AutonomyLevel
+from reins.pricing import DEFAULT_PRICING, Pricing
 from reins.sandbox import DockerSandbox, Sandbox, SubprocessSandbox
 from reins.types import Context, ToolSpec
 
 __all__ = [
+    "DEFAULT_PRICING",
     "Agent",
     "ApprovalHandler",
     "ApprovalRequest",
     "AuditRecord",
     "AuditSink",
     "AutonomyLevel",
+    "Budget",
     "Context",
     "DockerSandbox",
     "MemoryAuditSink",
+    "Pricing",
     "Sandbox",
     "SchemaIndex",
     "SubprocessSandbox",
