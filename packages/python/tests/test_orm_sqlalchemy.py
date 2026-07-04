@@ -123,6 +123,26 @@ def test_natural_key_preferred_over_internal_id(engine: Engine) -> None:
     assert "get_order_by_id" in _names(order_caps)
 
 
+def test_natural_key_must_be_unique_not_merely_hint_named() -> None:
+    # `name` is a natural-key hint word but is NOT unique here; `sku` is the real
+    # unique key. The lookup key must identify exactly one row — so it's sku, not
+    # name (else update_/delete_ could hit the wrong row).
+    class Product(Base):
+        """A catalog product."""
+
+        __tablename__ = "products"
+        id: Mapped[int] = mapped_column(primary_key=True)
+        sku: Mapped[str] = mapped_column(String, unique=True)
+        name: Mapped[str] = mapped_column(String)  # not unique
+
+    eng = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    caps, _ = build_orm(eng, models=[Product], can_write=True)
+    names = _names(caps)
+    assert "get_product_by_sku" in names
+    assert "get_product_by_name" not in names
+
+
 def test_create_omits_the_autoincrement_primary_key(engine: Engine) -> None:
     caps, _ = build_orm(engine, models=[User], can_write=True)
     props = _by_name(caps, "create_user").spec.input_schema["properties"]

@@ -27,11 +27,13 @@ dev = [
     "pytest>=8.0",
     "pre-commit>=3.7",
     "pyyaml>=6.0",       # parse spec/conformance/cases/*.yaml (test-only)
-    "sqlalchemy>=2.0",   # exercise the ORM adapter against in-memory SQLite (test-only)
+    "sqlalchemy>=2.0",   # exercise the SQLAlchemy ORM adapter against in-memory SQLite (test-only)
+    "django>=4.2",       # exercise the Django ORM adapter against in-memory SQLite (test-only)
 ]
 anthropic = ["anthropic>=0.40"]   # optional: the AnthropicModel adapter (M1.2)
 openai = ["openai>=1.40"]         # optional: OpenAI/Groq/vLLM/Ollama/Z.ai/Gemini via compat (M2.5)
 sqlalchemy = ["sqlalchemy>=2.0"]  # optional: Agent.from_orm SQLAlchemy auto-expose (M4.1)
+django = ["django>=4.2"]          # optional: Agent.from_orm Django auto-expose (M4.2)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reins"]
@@ -44,6 +46,11 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# Django requires settings.configure() + django.setup() to run before any model
+# import, so reins imports here are deliberately below that setup.
+"tests/test_orm_django.py" = ["E402"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
@@ -53,7 +60,16 @@ warn_unused_configs = true
 # The provider SDKs are optional extras, not installed in the dev/CI env; the
 # adapters import them lazily. Treat them as untyped at the boundary.
 [[tool.mypy.overrides]]
-module = ["anthropic", "anthropic.*", "openai", "openai.*", "sqlalchemy", "sqlalchemy.*"]
+module = [
+    "anthropic",
+    "anthropic.*",
+    "openai",
+    "openai.*",
+    "sqlalchemy",
+    "sqlalchemy.*",
+    "django",
+    "django.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

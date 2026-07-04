@@ -763,7 +763,7 @@ class Agent:
     @classmethod
     def from_orm(
         cls,
-        db: Any,
+        db: Any = None,
         *,
         models: Any | None = None,
         can_write: bool = False,
@@ -772,12 +772,14 @@ class Agent:
     ) -> Agent:
         """Build an agent straight from your ORM models — zero hand-written capabilities.
 
-        Introspects ``models`` (mapped classes or a declarative base) reached
-        through ``db`` (a SQLAlchemy ``Session``, ``sessionmaker``, session
-        factory, or ``Engine``) and exposes intent-level, linted capabilities plus
-        a schema index for progressive disclosure. Reads are always available;
-        write capabilities appear only with ``can_write=True`` and are gated by
-        the autonomy ladder exactly like any other write. Extra keyword arguments
+        Introspects ``models`` and exposes intent-level, linted capabilities plus a
+        schema index for progressive disclosure. SQLAlchemy models (or a
+        declarative base) are reached through ``db`` (a ``Session``,
+        ``sessionmaker``, session factory, or ``Engine``); Django models, an app
+        label, or an ``AppConfig`` need no ``db`` (the connection is global), so
+        call ``Agent.from_orm(models=[...])``. Reads are always available; write
+        capabilities appear only with ``can_write=True`` and are gated by the
+        autonomy ladder exactly like any other write. Extra keyword arguments
         (``model``, ``autonomy``, ``approve``, ``principal``, ``audit`` …) are
         forwarded to the constructor.
         """

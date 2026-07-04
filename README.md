@@ -49,27 +49,28 @@ explicitly: `Agent(model="openai:gpt-4o")`, `Agent(model="ollama:llama3.1")`, or
 
 ### Already have an ORM? Skip the decorating.
 
-Point Reins at your SQLAlchemy models and it generates the capabilities for you —
-intent-named verbs, not raw tables — with **zero hand-written code**:
+Point Reins at your **SQLAlchemy or Django** models and it generates the
+capabilities for you — intent-named verbs, not raw tables — with **zero
+hand-written code**:
 
 ```python
 from reins import Agent
 
-# reads only, by default — the agent literally cannot write
-agent = Agent.from_orm(db, models=[User, Order])
+# SQLAlchemy: pass your Session / sessionmaker / Engine
+agent = Agent.from_orm(db, models=[User, Order])              # reads only, safe
 agent.ask("how many orders are still open for acme@corp.com?")
 
-# opt into writes; each one is still gated for approval before it runs
-agent = Agent.from_orm(db, models=[User, Order], can_write=True)
+# Django: no db argument — the connection is global
+agent = Agent.from_orm(models=[User, Order], can_write=True)  # writes opt-in, gated
 agent.run("refund order 8842 and email the customer")
 ```
 
-`db` is your SQLAlchemy `Session`, `sessionmaker`, or `Engine`. Reins introspects
-each model into `find_orders` / `get_user_by_email` / `create_user` / … (lookups
-prefer a natural key like email over internal ids), builds a searchable schema
-index, trims every response so raw tables never flood the context, and runs it all
-through **your** session — inheriting your constraints and validation. (Django ORM
-is next on the roadmap.)
+Reins introspects each model into `find_orders` / `get_user_by_email` /
+`create_user` / … (lookups prefer a **unique** natural key like email over
+internal ids), builds a searchable schema index, trims every response so raw
+tables never flood the context, and runs it all through **your** ORM —
+inheriting your constraints and validation. The same `from_orm` works
+identically for SQLAlchemy and Django.
 
 ## Why Reins
 
@@ -104,7 +105,8 @@ Reins requires **Python 3.11+**.
 pip install reins                 # core (first PyPI release coming soon)
 pip install "reins[anthropic]"    # with the Anthropic backend
 pip install "reins[openai]"       # with OpenAI / Gemini / Groq / Z.ai / Ollama / vLLM
-pip install "reins[sqlalchemy]"   # with Agent.from_orm(...) auto-expose
+pip install "reins[sqlalchemy]"   # with Agent.from_orm(...) for SQLAlchemy
+pip install "reins[django]"       # with Agent.from_orm(...) for Django
 ```
 
 Until the first published release, install from source:
@@ -307,8 +309,8 @@ before `1.0`.
 - [x] On-demand capability & schema discovery — constant context at any scale
 - [x] Code-mode execution — sandboxed programs, data never transits the model
 - [x] Budgets (turns/tokens/cost/time) and history compaction that keeps the goal
-- [x] SQLAlchemy auto-exposure — `Agent.from_orm(db)`, zero hand-written capabilities
-- [ ] Django ORM auto-exposure and a zero-code `reins chat <db-url>`
+- [x] SQLAlchemy **and Django** auto-exposure — `Agent.from_orm(...)`, zero capabilities
+- [ ] A zero-code `reins chat <db-url>` CLI and instant web/API integrations
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development
