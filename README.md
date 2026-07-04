@@ -47,6 +47,30 @@ The model is auto-detected from your environment (set any of `ANTHROPIC_API_KEY`
 explicitly: `Agent(model="openai:gpt-4o")`, `Agent(model="ollama:llama3.1")`, or just
 `Agent(model="claude-opus-4-8")`.
 
+### Already have an ORM? Skip the decorating.
+
+Point Reins at your SQLAlchemy models and it generates the capabilities for you —
+intent-named verbs, not raw tables — with **zero hand-written code**:
+
+```python
+from reins import Agent
+
+# reads only, by default — the agent literally cannot write
+agent = Agent.from_orm(db, models=[User, Order])
+agent.ask("how many orders are still open for acme@corp.com?")
+
+# opt into writes; each one is still gated for approval before it runs
+agent = Agent.from_orm(db, models=[User, Order], can_write=True)
+agent.run("refund order 8842 and email the customer")
+```
+
+`db` is your SQLAlchemy `Session`, `sessionmaker`, or `Engine`. Reins introspects
+each model into `find_orders` / `get_user_by_email` / `create_user` / … (lookups
+prefer a natural key like email over internal ids), builds a searchable schema
+index, trims every response so raw tables never flood the context, and runs it all
+through **your** session — inheriting your constraints and validation. (Django ORM
+is next on the roadmap.)
+
 ## Why Reins
 
 - **Your verbs, not your tables.** The model sees intent-named operations with real
@@ -80,6 +104,7 @@ Reins requires **Python 3.11+**.
 pip install reins                 # core (first PyPI release coming soon)
 pip install "reins[anthropic]"    # with the Anthropic backend
 pip install "reins[openai]"       # with OpenAI / Gemini / Groq / Z.ai / Ollama / vLLM
+pip install "reins[sqlalchemy]"   # with Agent.from_orm(...) auto-expose
 ```
 
 Until the first published release, install from source:
@@ -282,7 +307,8 @@ before `1.0`.
 - [x] On-demand capability & schema discovery — constant context at any scale
 - [x] Code-mode execution — sandboxed programs, data never transits the model
 - [x] Budgets (turns/tokens/cost/time) and history compaction that keeps the goal
-- [ ] ORM auto-exposure (SQLAlchemy, Django) and a zero-code `reins chat <db-url>`
+- [x] SQLAlchemy auto-exposure — `Agent.from_orm(db)`, zero hand-written capabilities
+- [ ] Django ORM auto-exposure and a zero-code `reins chat <db-url>`
 - [ ] Go and TypeScript packages, verified against one shared conformance suite
 
 ## Development

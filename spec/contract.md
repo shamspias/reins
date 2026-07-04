@@ -175,6 +175,28 @@ Never dump every capability schema or the whole data model into context
 
 ---
 
+## 5.1 ORM auto-expose *(from M4.1)*
+
+Point Reins at mapped models and it generates the **verbs, not the tables** — no
+hand-written capabilities:
+
+- **Reads (always, safe):** `find_<plural>` and `count_<plural>` with optional
+  filters, plus `get_<singular>_by_<key>` when a lookup key exists. Lookups
+  prefer a **natural key** (email / slug / name) over an internal id.
+- **Writes (only with `can_write=True`, gated):** `create_<singular>`,
+  `update_<singular>`, `delete_<singular>` (delete is `destructive`). Without
+  `can_write`, no write capability exists — `run()` cannot write.
+- Every generated capability **must pass the Capability Linter** before exposure
+  (§2.15): verb-first names, real descriptions, lean parameters (capped;
+  autoincrement PKs and defaulted columns are optional), and **trimmed
+  responses** (bounded rows and columns — never a raw table dump). A candidate
+  that cannot be made linter-clean is dropped, not shipped.
+- A `SchemaIndex` is produced alongside, so the data model is available to
+  progressive disclosure (§4.1), not dumped into context.
+- The agent runs *your* mapped classes through *your* session, inheriting your
+  validation and constraints — no raw SQL (§2.3). Python ships SQLAlchemy
+  (M4.1); the Go/TS ports expose the same shape over their ORMs.
+
 ## 6. Errors (cross-cutting)
 
 Every user-facing error ends with a `→ next step` *(invariant §2.19)*. Capability
