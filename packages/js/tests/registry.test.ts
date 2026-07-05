@@ -94,11 +94,39 @@ describe('argument validation (§2.6 — model output is untrusted)', () => {
     expect(() => reg.validate('get_order', { id: 5 })).not.toThrow();
   });
 
+  it('rejects prototype-named arguments (no prototype-chain bypass, §2.6)', () => {
+    const reg = orderRegistry();
+    // "toString"/"constructor" are Object.prototype members, not schema properties.
+    expect(() => reg.validate('get_order', { id: 1, toString: 'x' })).toThrow(
+      /unexpected argument/,
+    );
+    expect(() => reg.validate('get_order', { id: 1, constructor: 'x' })).toThrow(
+      /unexpected argument/,
+    );
+  });
+
   it('returns a validation failure as data through call()', async () => {
     const reg = orderRegistry();
     const result = await reg.call('get_order', { id: 'bad' }, ctx);
     expect(result.ok).toBe(false);
     expect(result.error).toContain('must be of type integer');
+  });
+});
+
+describe('registry-level RLS (defense in depth, §2.8)', () => {
+  it('refuses a scoped capability at the chokepoint when there is no principal', async () => {
+    const reg = new CapabilityRegistry();
+    let ran = false;
+    reg.register(
+      capability('get_my_orders', { description: 'List the caller orders.', scope: 'user' }, () => {
+        ran = true;
+        return [];
+      }),
+    );
+    const result = await reg.call('get_my_orders', {}, {}); // no principal
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('scoped to');
+    expect(ran).toBe(false);
   });
 });
 

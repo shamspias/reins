@@ -17,4 +17,8 @@ export * from './capability.js';
 export * from './registry.js';
 export * from './budget.js';
 export * from './stop.js';
+export * from './policy.js';
+export * from './approval.js';
+export * from './audit.js';
+export * from './rls.js';
 export * from './loop.js';
