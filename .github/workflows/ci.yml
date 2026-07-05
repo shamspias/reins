@@ -27,3 +27,15 @@ jobs:
           go-version: "1.23"
       - name: Run the Go gate
         run: make go-check
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        run: make js-setup
+      - name: Run the TS gate
+        run: make js-check
