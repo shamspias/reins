@@ -11,6 +11,7 @@ export const VERSION = '0.1.0a1';
 export * from './types.js';
 export * from './errors.js';
 export * from './model.js';
+export * from './openai.js';
 export * from './classify.js';
 export * from './linter.js';
 export * from './capability.js';
