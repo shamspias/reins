@@ -2,6 +2,7 @@ import type { BoundCapability } from './capability.js';
 import type { Capability, CapabilityResult, Context, JSONSchema, ToolSpec } from './types.js';
 import { resultOk, resultError, toolSpec } from './types.js';
 import { ReinsError } from './errors.js';
+import { scopeViolation } from './rls.js';
 
 /**
  * CapabilityRegistry is the only path by which the agent reaches a capability. It
@@ -67,6 +68,12 @@ export class CapabilityRegistry {
         : 'register it with a capability';
       return resultError(`no capability named "${name}"\n  → ${fix}`);
     }
+    // RLS before anything runs (§2.8): the registry is the only path to a
+    // capability, so it guards scope itself — not just the loop (defense in depth).
+    const violation = scopeViolation(cap.spec, ctx);
+    if (violation) {
+      return resultError(violation);
+    }
     const err = validateArgs(cap.spec.input_schema, args, name);
     if (err) {
       return resultError(err.message);
@@ -91,14 +98,16 @@ export function validateArgs(
   const properties = asObject(schema?.['properties']) ?? {};
   const allowExtra = schema?.['additionalProperties'] === true;
 
+  // Use own-property checks throughout: args are untrusted model output (§2.6), so
+  // keys like "toString"/"constructor"/"__proto__" must not resolve via the
+  // prototype chain and slip past the schema (Go's maps have no such chain).
   for (const key of requiredKeys(schema)) {
-    if (!(key in args)) {
+    if (!Object.hasOwn(args, key)) {
       return new ReinsError(`${capName}: missing required argument "${key}"`, `include ${key}`);
     }
   }
   for (const [key, value] of Object.entries(args)) {
-    const spec = properties[key];
-    if (spec === undefined) {
+    if (!Object.hasOwn(properties, key)) {
       if (allowExtra) {
         continue;
       }
@@ -107,7 +116,7 @@ export function validateArgs(
         `allowed: ${Object.keys(properties).sort().join(', ')}`,
       );
     }
-    const expected = asObject(spec)?.['type'];
+    const expected = asObject(properties[key])?.['type'];
     if (typeof expected === 'string' && !typeMatches(expected, value)) {
       return new ReinsError(
         `${capName}: argument "${key}" must be of type ${expected}`,

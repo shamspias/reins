@@ -86,7 +86,7 @@ describe('runLoop — the ask/run write boundary', () => {
     expect(deleteCalls).toBe(0); // the handler was never invoked
   });
 
-  it('run() fails closed on a write until the M7.4 approval gate', async () => {
+  it('run() fails closed on a write with the default deny-all gate', async () => {
     deleteCalls = 0;
     const model = new FakeModel(
       callResponse('c1', 'delete_order', { id: 1 }),
@@ -95,9 +95,10 @@ describe('runLoop — the ask/run write boundary', () => {
     const reg = new CapabilityRegistry();
     reg.register(deleteCap());
 
+    // No approve handler → the fail-closed deny-all gate denies the destructive write.
     const rep = await runLoop(model, reg, 'delete order 1', true);
     expect(rep.outcome).toBe('not_executed');
-    expect(rep.reason).toBe('write_denied');
+    expect(rep.reason).toBe('approval_denied');
     expect(deleteCalls).toBe(0);
   });
 });
