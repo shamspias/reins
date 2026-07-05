@@ -14,3 +14,7 @@ export * from './model.js';
 export * from './classify.js';
 export * from './linter.js';
 export * from './capability.js';
+export * from './registry.js';
+export * from './budget.js';
+export * from './stop.js';
+export * from './loop.js';
