@@ -8,6 +8,7 @@
 PKG  := packages/python
 VBIN := $(PKG)/.venv/bin
 GODIR := packages/go
+JSDIR := packages/js
 
 # Prefer the project venv's tools. abspath keeps the path valid after `cd $(PKG)`.
 PY     := $(if $(wildcard $(VBIN)/python),$(abspath $(VBIN)/python),python3)
@@ -17,7 +18,7 @@ PYTEST := $(if $(wildcard $(VBIN)/pytest),$(abspath $(VBIN)/pytest),pytest)
 GO     := go
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint types test conformance check demo clean go-lint go-test go-check
+.PHONY: help setup lint types test conformance check demo clean go-lint go-test go-check js-setup js-check
 
 help:
 	@echo "Reins — make targets:"
@@ -29,6 +30,7 @@ help:
 	@echo "  check        lint + types + test + conformance   <- the Python gate"
 	@echo "  demo         run the flagship example end-to-end"
 	@echo "  go-check     gofmt + go vet + go test           <- the Go gate (Phase 6)"
+	@echo "  js-check     prettier + tsc --noEmit + vitest   <- the TS gate (Phase 7)"
 	@echo "  clean        remove the local venv and caches"
 
 setup:
@@ -77,6 +79,17 @@ go-test:
 
 go-check: go-lint go-test
 	@echo ">> go-check: all green"
+
+# The TypeScript port (Phase 7). Like go-check, a separate gate with its own CI job
+# so the Python and Go jobs need no Node toolchain. `js-setup` installs deps.
+js-setup:
+	cd $(JSDIR) && npm install
+
+js-check:
+	cd $(JSDIR) && npm run format:check
+	cd $(JSDIR) && npm run typecheck
+	cd $(JSDIR) && npm test
+	@echo ">> js-check: all green"
 
 # The flagship example: a deterministic end-to-end walkthrough (FakeModel, no key).
 demo:
