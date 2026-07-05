@@ -384,7 +384,7 @@ the trace, just like the audit log.
 | Adding it to an app | Wrap logic in framework primitives       | Decorate functions you already have              |
 | CRUD on a database  | Often raw SQL tools, or custom nodes     | Calls your typed methods, inheriting your auth   |
 | Debuggability       | Debug the framework's internals          | Debug your own small loop and your own functions |
-| Languages           | Python-first                             | Python + Go today (Go in alpha); TypeScript next  |
+| Languages           | Python-first                             | Python, Go, and TypeScript — one shared conformance suite |
 
 ## Status
 
@@ -413,7 +413,7 @@ before `1.0`.
 - [x] Instant web integration — `reins.endpoint`, `<reins-chat>`, session-identity → RLS
 - [x] A flagship end-to-end example (FastAPI + SQLAlchemy, gated writes) — `make demo`
 - [x] **Go package** (`packages/go`) — same verbs, passes the shared conformance suite; capabilities + classification + linter, the `Ask`/`Run` loop, full safety (policy/approval/audit/RLS), progressive disclosure, an OpenAI-compatible adapter for all providers above, GORM `FromORM`, and a `reins inspect|ask|chat <db-url>` CLI. Remaining: a native Go code-mode sandbox.
-- [ ] TypeScript package, verified against the same shared conformance suite
+- [x] **TypeScript package** (`packages/js`) — same verbs, **passes the shared conformance suite**; the core types + `Model`/`FakeModel`, capabilities + classification + linter, the async `ask`/`run` loop, full safety (policy/approval/audit/RLS), and dual progressive disclosure. Remaining: a native TS code-mode sandbox, `fromORM` (Prisma/Drizzle), a CLI, and `<reins-chat>`.
 
 ## Development
 

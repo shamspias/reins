@@ -7,6 +7,8 @@ import type {
   ModelResponse,
   RunResult,
   RunState,
+  SchemaIndex,
+  ToolCall,
   Usage,
 } from './types.js';
 import type { Model } from './model.js';
@@ -26,6 +28,7 @@ import {
 } from './approval.js';
 import { type AuditRecord, type AuditSink, MemoryAuditSink, redactArguments } from './audit.js';
 import { scopeViolation } from './rls.js';
+import { Disclosure } from './disclosure.js';
 
 /**
  * The harness loop and the Agent — the TypeScript mirror of the ETCSLV lifecycle:
@@ -75,6 +78,10 @@ export interface RunOptions {
   approve?: ApprovalHandler | ApprovalFn;
   audit?: AuditSink;
   confirmBulk?: boolean;
+  /** A data-model index reachable via search_schema (progressive disclosure). */
+  schema?: SchemaIndex;
+  /** Force capability disclosure on/off (default: auto, above the defer threshold). */
+  defer?: boolean;
 }
 
 /** The immutable per-run wiring the loop's helpers share. */
@@ -87,6 +94,7 @@ interface RunEnv {
   ctx: Context;
   canWrite: boolean;
   autonomy: AutonomyLevel;
+  disclosure: Disclosure;
 }
 
 /** The mutable per-run state the loop accumulates. */
@@ -122,6 +130,7 @@ export async function runLoop(
     ctx: { principal: options.principal, trace_id: newTraceId() },
     canWrite,
     autonomy,
+    disclosure: new Disclosure(registry, options.schema, options.defer),
   };
   const tally: Tally = { executed: [], wrote: false, audit: [] };
 
@@ -150,7 +159,7 @@ export async function runLoop(
       );
     }
 
-    const resp = await model.complete(messages, registry.toolSpecs(), params);
+    const resp = await model.complete(messages, env.disclosure.tools(), params);
     usage = addUsage(usage, resp.usage);
     messages.push(resp.message);
     last = resp;
@@ -197,7 +206,18 @@ async function act(
   usage: Usage,
   turn: number,
 ): Promise<RunReport | undefined> {
-  const items = toolCalls.map((call) => ({ call, cap: env.registry.get(call.name) }));
+  // Discovery calls (search_capabilities / search_schema) are harness-internal
+  // reads: answered here, free at every autonomy level, allowed under ask() (§2.12).
+  const pending: ToolCall[] = [];
+  for (const call of toolCalls) {
+    const answered = env.disclosure.answer(call);
+    if (answered) {
+      messages.push(toolMessage(call.id, answered));
+      continue;
+    }
+    pending.push(call);
+  }
+  const items = pending.map((call) => ({ call, cap: env.registry.get(call.name) }));
 
   if (!env.canWrite) {
     // ask(): structurally read-only — refuse the whole turn if any known call writes (§2.1).
@@ -447,6 +467,10 @@ export interface AgentConfig {
   confirmBulk?: boolean;
   /** Override the policy engine (default: the autonomy ladder). */
   policy?: Policy;
+  /** A data-model index reachable via search_schema (progressive disclosure). */
+  schema?: SchemaIndex;
+  /** Force capability disclosure on/off (default: auto, above the defer threshold). */
+  defer?: boolean;
 }
 
 /**
@@ -489,6 +513,8 @@ export class Agent {
     if (this.config.approve !== undefined) options.approve = this.config.approve;
     if (this.config.confirmBulk !== undefined) options.confirmBulk = this.config.confirmBulk;
     if (this.config.policy !== undefined) options.policy = this.config.policy;
+    if (this.config.schema !== undefined) options.schema = this.config.schema;
+    if (this.config.defer !== undefined) options.defer = this.config.defer;
 
     const rep = await runLoop(this.model, this.registry, goal, canWrite, options);
     return { output: rep.output, reason: rep.finish, usage: rep.usage, trace_id: rep.trace_id };
