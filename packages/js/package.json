@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./orm": {
+      "types": "./dist/orm/index.d.ts",
+      "import": "./dist/orm/index.js"
     }
   },
   "files": [
@@ -17,6 +21,14 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.30"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -27,8 +39,10 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "devDependencies": {
+    "@libsql/client": "^0.17.4",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
+    "drizzle-orm": "^0.45.2",
     "js-yaml": "^5.2.1",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",

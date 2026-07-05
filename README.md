@@ -413,7 +413,7 @@ before `1.0`.
 - [x] Instant web integration — `reins.endpoint`, `<reins-chat>`, session-identity → RLS
 - [x] A flagship end-to-end example (FastAPI + SQLAlchemy, gated writes) — `make demo`
 - [x] **Go package** (`packages/go`) — same verbs, passes the shared conformance suite; capabilities + classification + linter, the `Ask`/`Run` loop, full safety (policy/approval/audit/RLS), progressive disclosure, an OpenAI-compatible adapter for all providers above, GORM `FromORM`, and a `reins inspect|ask|chat <db-url>` CLI. Remaining: a native Go code-mode sandbox.
-- [x] **TypeScript package** (`packages/js`) — same verbs, **passes the shared conformance suite**; the core types + `Model`/`FakeModel`, capabilities + classification + linter, the async `ask`/`run` loop, full safety (policy/approval/audit/RLS), and dual progressive disclosure. Remaining: a native TS code-mode sandbox, `fromORM` (Prisma/Drizzle), a CLI, and `<reins-chat>`.
+- [x] **TypeScript package** (`packages/js`) — same verbs, **passes the shared conformance suite**; the core types + `Model`/`FakeModel`, capabilities + classification + linter, the async `ask`/`run` loop, full safety (policy/approval/audit/RLS), dual progressive disclosure, and `fromDrizzle` (auto-expose Drizzle models via the optional `reins/orm` subpath). Remaining: a native TS code-mode sandbox, a CLI, and `<reins-chat>`.
 
 ## Development
 
