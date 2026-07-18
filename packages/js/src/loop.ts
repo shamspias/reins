@@ -9,12 +9,14 @@ import type {
   RunState,
   SchemaIndex,
   ToolCall,
+  ToolSpec,
   Usage,
 } from './types.js';
 import type { Model } from './model.js';
 import type { BoundCapability } from './capability.js';
+import type { Sandbox } from './sandbox.js';
 import { CapabilityRegistry } from './registry.js';
-import { resultError, defaultModelParams } from './types.js';
+import { resultOk, resultError, defaultModelParams } from './types.js';
 import { type Budget, defaultBudget, overTokens } from './budget.js';
 import { GoalReached, MaxTurns, type StopCondition, firstStop } from './stop.js';
 import { type AutonomyLevel, type Policy, type ProposedAction, DefaultPolicy } from './policy.js';
@@ -47,6 +49,25 @@ import { Disclosure } from './disclosure.js';
 const SYSTEM_PROMPT =
   'You operate an application through its registered capabilities. ' +
   "Use them to accomplish the user's goal, then reply with a final answer.";
+
+const RUN_PROGRAM = 'run_program';
+const MAX_PROGRAM_CHARS = 8_000;
+
+// The code-mode tool, offered only when a sandbox is configured (§2.11). The
+// program's capability calls are bridged back through the full gate chain.
+const runProgramSpec: ToolSpec = {
+  name: RUN_PROGRAM,
+  description:
+    'Run a short JavaScript program in a sandbox. Every available operation is an ' +
+    'async function you can await; print(...) what you want back. Bulk data stays in ' +
+    'the sandbox — only what you print returns.',
+  input_schema: {
+    type: 'object',
+    properties: { code: { type: 'string' } },
+    required: ['code'],
+    additionalProperties: false,
+  },
+};
 
 function newTraceId(): string {
   return randomBytes(16).toString('hex');
@@ -82,6 +103,8 @@ export interface RunOptions {
   schema?: SchemaIndex;
   /** Force capability disclosure on/off (default: auto, above the defer threshold). */
   defer?: boolean;
+  /** A code-mode sandbox; when set, the model may write sandboxed programs (§2.11). */
+  sandbox?: Sandbox;
 }
 
 /** The immutable per-run wiring the loop's helpers share. */
@@ -95,6 +118,7 @@ interface RunEnv {
   canWrite: boolean;
   autonomy: AutonomyLevel;
   disclosure: Disclosure;
+  sandbox?: Sandbox;
 }
 
 /** The mutable per-run state the loop accumulates. */
@@ -131,6 +155,7 @@ export async function runLoop(
     canWrite,
     autonomy,
     disclosure: new Disclosure(registry, options.schema, options.defer),
+    ...(options.sandbox ? { sandbox: options.sandbox } : {}),
   };
   const tally: Tally = { executed: [], wrote: false, audit: [] };
 
@@ -159,7 +184,10 @@ export async function runLoop(
       );
     }
 
-    const resp = await model.complete(messages, env.disclosure.tools(), params);
+    const tools = env.sandbox
+      ? [...env.disclosure.tools(), runProgramSpec]
+      : env.disclosure.tools();
+    const resp = await model.complete(messages, tools, params);
     usage = addUsage(usage, resp.usage);
     messages.push(resp.message);
     last = resp;
@@ -213,6 +241,12 @@ async function act(
     const answered = env.disclosure.answer(call);
     if (answered) {
       messages.push(toolMessage(call.id, answered));
+      continue;
+    }
+    // A run_program call executes in the sandbox (code-mode, §2.11); every capability
+    // call the program makes is bridged back through the full gate chain.
+    if (call.name === RUN_PROGRAM && env.sandbox) {
+      messages.push(toolMessage(call.id, await runProgram(env, tally, call)));
       continue;
     }
     pending.push(call);
@@ -401,6 +435,124 @@ async function auditAction(
   return true;
 }
 
+/**
+ * Execute one agent-written program in the sandbox (code-mode, §2.11). Its
+ * capability calls are served by {@link bridgedCall}, so the sandbox isolates
+ * computation but never authority — ask()'s read-only wall, policy, approval, bulk
+ * confirm, audit, and RLS all apply to every call the program makes.
+ */
+async function runProgram(env: RunEnv, tally: Tally, call: ToolCall): Promise<CapabilityResult> {
+  const code = call.arguments?.['code'];
+  if (typeof code !== 'string' || code.trim() === '') {
+    return resultError(
+      "run_program: 'code' must be a non-empty string\n  → pass JavaScript source in code=",
+    );
+  }
+  if (code.length > MAX_PROGRAM_CHARS) {
+    return resultError(
+      `run_program: the program is too long (${code.length} chars, max ${MAX_PROGRAM_CHARS})\n  → split the work into smaller programs`,
+    );
+  }
+  const names = env.registry.list().map((c) => c.name);
+  const outcome = await env.sandbox!.run(code, names, (name, args) =>
+    bridgedCall(env, tally, name, args),
+  );
+  if (outcome.ok) {
+    return resultOk(outcome.output || '(the program produced no output — print() what you need)');
+  }
+  let error = outcome.error ?? 'the program failed';
+  if (outcome.output) {
+    error += `\npartial output:\n${outcome.output}`;
+  }
+  return resultError(error);
+}
+
+/**
+ * Gate and execute one capability call made from inside a program. Mirrors the
+ * direct-call path exactly, per call: the ask() read-only wall (§2.1), policy by
+ * autonomy (§2.2), approval + bulk confirm, audit with no-audit-no-action, then RLS
+ * + validation + execution. A blocked call is an error the *program* can handle.
+ */
+async function bridgedCall(
+  env: RunEnv,
+  tally: Tally,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<CapabilityResult> {
+  const cap = env.registry.get(name);
+  if (!cap) {
+    return env.registry.call(name, args, env.ctx); // errors-as-data, with closest-match suggestions
+  }
+  const action: ProposedAction = {
+    call: { id: `prog_${tally.executed.length}`, name, arguments: args },
+    capability: cap.spec,
+  };
+  if (cap.spec.access !== 'read') {
+    if (!env.canWrite) {
+      await auditAction(env, tally, action, 'refused', 'write_in_read_only');
+      return resultError(
+        `"${name}" would write, but this is a read-only ask()\n  → use run(...) if writing is intended`,
+      );
+    }
+    const verdict = env.policy.checkActions([action], env.autonomy);
+    if (verdict.decision === 'deny') {
+      await auditAction(env, tally, action, 'denied', verdict.reason);
+      return resultError(
+        `"${name}" was not run (${verdict.reason || 'denied by policy'})\n  → adjust the goal or the agent's autonomy level`,
+      );
+    }
+    let needsApproval = verdict.decision === 'require_approval';
+    let reason = verdict.reason || 'approval_required';
+    const count = env.confirmBulk ? bulkCount([action]) : undefined;
+    if (count !== undefined && !needsApproval) {
+      needsApproval = true;
+      reason = 'bulk_confirm';
+    }
+    if (needsApproval) {
+      const request: ApprovalRequest = { actions: [action], reason };
+      if (count !== undefined) {
+        request.bulkCount = count;
+      }
+      const approved = await env.gate.approve(request);
+      const recorded = await auditAction(
+        env,
+        tally,
+        action,
+        approved ? 'approved' : 'approval_denied',
+        reason,
+      );
+      if (!approved) {
+        return resultError(
+          `"${name}" was not approved\n  → the human denied it, or pass an approve handler that returns true`,
+        );
+      }
+      if (!recorded) {
+        return resultError(
+          'audit sink failed — the write was not executed\n  → fix the audit sink; no audit, no action',
+        );
+      }
+    }
+  }
+  const violation = scopeViolation(cap.spec, env.ctx);
+  if (violation) {
+    return resultError(violation);
+  }
+  try {
+    env.registry.validate(name, args);
+  } catch (e) {
+    return resultError(e instanceof Error ? e.message : String(e));
+  }
+  if (cap.spec.access !== 'read') {
+    if (!(await auditAction(env, tally, action, 'executed', ''))) {
+      return resultError('audit sink failed — the write was not executed\n  → fix the audit sink');
+    }
+    tally.wrote = true;
+  }
+  const result = await env.registry.call(name, args, env.ctx);
+  tally.executed.push(name);
+  return result;
+}
+
 function toolMessage(callId: string, result: CapabilityResult): Message {
   const text = result.ok ? stringifyValue(result.value) : (result.error ?? '');
   return { role: 'tool', tool_call_id: callId, text };
@@ -471,6 +623,8 @@ export interface AgentConfig {
   schema?: SchemaIndex;
   /** Force capability disclosure on/off (default: auto, above the defer threshold). */
   defer?: boolean;
+  /** A code-mode sandbox; when set, the model may write sandboxed programs (§2.11). */
+  sandbox?: Sandbox;
 }
 
 /**
@@ -515,6 +669,7 @@ export class Agent {
     if (this.config.policy !== undefined) options.policy = this.config.policy;
     if (this.config.schema !== undefined) options.schema = this.config.schema;
     if (this.config.defer !== undefined) options.defer = this.config.defer;
+    if (this.config.sandbox !== undefined) options.sandbox = this.config.sandbox;
 
     const rep = await runLoop(this.model, this.registry, goal, canWrite, options);
     return { output: rep.output, reason: rep.finish, usage: rep.usage, trace_id: rep.trace_id };
