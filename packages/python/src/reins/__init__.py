@@ -23,6 +23,7 @@ from reins.disclosure import SchemaIndex, TableInfo
 from reins.loop import Agent
 from reins.policy import AutonomyLevel
 from reins.pricing import DEFAULT_PRICING, Pricing
+from reins.record import RecordingModel, ReplayModel
 from reins.sandbox import DockerSandbox, Sandbox, SubprocessSandbox
 from reins.types import Context, RunResult, ToolSpec, TraceEvent
 
@@ -39,6 +40,8 @@ __all__ = [
     "DockerSandbox",
     "MemoryAuditSink",
     "Pricing",
+    "RecordingModel",
+    "ReplayModel",
     "Sandbox",
     "SchemaIndex",
     "SubprocessSandbox",

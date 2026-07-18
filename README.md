@@ -408,6 +408,7 @@ before `1.0`.
 - [x] On-demand capability & schema discovery — constant context at any scale
 - [x] Code-mode execution — sandboxed programs, data never transits the model
 - [x] Budgets (turns/tokens/cost/time) and history compaction that keeps the goal
+- [x] Record / replay — `RecordingModel` / `ReplayModel` capture a run and re-run it offline, deterministically
 - [x] SQLAlchemy **and Django** auto-exposure — `Agent.from_orm(...)`, zero capabilities
 - [x] Zero-code CLI — `reins chat` / `ask` / `inspect <db-url>` and `from_module`
 - [x] Instant web integration — `reins.endpoint`, `<reins-chat>`, session-identity → RLS
