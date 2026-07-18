@@ -1,4 +1,5 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+import type { DatabaseSync } from 'node:sqlite';
 import type { Model } from '../model.js';
 import type { BoundCapability } from '../capability.js';
 import { Agent } from '../loop.js';
@@ -15,13 +16,38 @@ import { fromSqlite } from './sqlite.js';
 /** A sink for one line of output. */
 export type Writer = (line: string) => void;
 
+type SqliteCtor = new (path: string) => DatabaseSync;
+let cachedCtor: SqliteCtor | undefined;
+
+/**
+ * Load node:sqlite lazily, so the CLI module still imports on Node < 22 (where the
+ * built-in is absent) and only errors — with a clear hint — when a database command
+ * actually runs. node:sqlite was added in Node 22.5.
+ */
+function loadSqlite(): SqliteCtor {
+  if (cachedCtor) {
+    return cachedCtor;
+  }
+  try {
+    const req = createRequire(import.meta.url);
+    cachedCtor = (req('node:sqlite') as { DatabaseSync: SqliteCtor }).DatabaseSync;
+    return cachedCtor;
+  } catch {
+    throw new ReinsError(
+      'the reins CLI needs Node 22+ (its built-in node:sqlite is unavailable)',
+      'upgrade Node to 22 or newer, then retry',
+    );
+  }
+}
+
 /**
  * Open a SQLite database from a URL: a bare path, `:memory:`, a `sqlite://` URL
  * (scheme stripped), or a `file:` URI (passed through).
  */
 export function openDb(dbUrl: string): DatabaseSync {
+  const Ctor = loadSqlite(); // throws a clear Node-22 hint if node:sqlite is missing
   try {
-    return new DatabaseSync(sqlitePath(dbUrl));
+    return new Ctor(sqlitePath(dbUrl));
   } catch (e) {
     throw new ReinsError(
       `cannot open database: ${message(e)}`,
